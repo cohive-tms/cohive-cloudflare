@@ -2,7 +2,7 @@
 
 A zero-cost, fully self-hosted, and ultra-lightweight business collaboration platform.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cospace-task/cospace)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cospace-tms/cospace)
 
 ---
 
@@ -40,7 +40,7 @@ Before you begin, ensure you have:
 ### 1. Click the Deploy Button
 Click the button below to start the deployment process:
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cospace-task/cospace)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cospace-tms/cospace)
 
 ### 2. Authorize & Deploy on Cloudflare
 1. Log in to (or sign up for) your Cloudflare dashboard and authorize GitHub access.
@@ -94,7 +94,7 @@ Add an extra layer of protection by placing Cloudflare Access in front of your d
 
 「維持費0円から始められる、完全独立（セルフホスト）型の超軽量ビジネスコラボレーションプラットフォーム」
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cospace-task/cospace)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cospace-tms/cospace)
 
 ---
 
@@ -132,7 +132,7 @@ Cloudflareの強力なサーバーレスエコシステム（Pages, Workers, D1,
 ### 1. デプロイボタンをクリックする
 以下の「Deploy to Cloudflare Pages」ボタンをクリックします。
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cospace-task/cospace)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cospace-tms/cospace)
 
 ### 2. 画面の指示に従いデプロイを完了する
 1. Cloudflare アカウントへログイン（または新規登録）し、GitHub アカウントとの連携を承認します。
