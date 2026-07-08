@@ -6,12 +6,20 @@ const frontendPackageJson = resolve('frontend/package.json');
 
 // サブモジュールがチェックアウトされているかチェック
 if (!existsSync(frontendPackageJson)) {
-  console.error('======================================================');
-  console.error('Error: frontend/package.json not found.');
-  console.error('Please ensure that the Git submodules are initialized.');
-  console.error('Run: git submodule update --init --recursive');
-  console.error('======================================================');
-  process.exit(1);
+  console.log('frontend/package.json not found. Trying to initialize git submodules...');
+  const submoduleResult = spawnSync('git', ['submodule', 'update', '--init', '--recursive'], {
+    stdio: 'inherit',
+    shell: true
+  });
+
+  if (!existsSync(frontendPackageJson)) {
+    console.error('======================================================');
+    console.error('Error: frontend/package.json not found after trying to initialize submodules.');
+    console.error('Please ensure that the Git submodules are initialized.');
+    console.error('Run: git submodule update --init --recursive');
+    console.error('======================================================');
+    process.exit(1);
+  }
 }
 
 
