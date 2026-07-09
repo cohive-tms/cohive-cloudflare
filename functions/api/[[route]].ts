@@ -109,45 +109,239 @@ export interface Env {
   JWT_SECRET?: string;
 }
 
+async function runMigrations(env: Env) {
+  // 1. users テーブルの既存データベースへの自動カラム追加（動的マイグレーション）
+  try {
+    await env.DB.prepare("SELECT recovery_code_hash FROM users LIMIT 1").all();
+  } catch (colErr: any) {
+    if (colErr.message && (colErr.message.includes("no such column") || colErr.message.includes("has no column"))) {
+      console.log("Database Migration: Adding recovery_code_hash column to users table...");
+      await env.DB.prepare("ALTER TABLE users ADD COLUMN recovery_code_hash TEXT").run();
+    }
+  }
+
+  try {
+    await env.DB.prepare("SELECT language FROM users LIMIT 1").all();
+  } catch (colErr: any) {
+    if (colErr.message && (colErr.message.includes("no such column") || colErr.message.includes("has no column"))) {
+      console.log("Database Migration: Adding language column to users table...");
+      await env.DB.prepare("ALTER TABLE users ADD COLUMN language TEXT DEFAULT 'ja'").run();
+    }
+  }
+
+  // 2. system_settings テーブルが存在するか確認、なければ作成
+  try {
+    await env.DB.prepare("SELECT 1 FROM system_settings LIMIT 1").all();
+  } catch (tblErr: any) {
+    if (tblErr.message && (tblErr.message.includes("no such table") || tblErr.message.includes("does not exist"))) {
+      console.log("Database Migration: Creating system_settings table...");
+      await env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS system_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
+    }
+  }
+
+  // 3. document_locks テーブルが存在するか確認、なければ作成 (0003相当)
+  try {
+    await env.DB.prepare("SELECT 1 FROM document_locks LIMIT 1").all();
+  } catch (tblErr: any) {
+    if (tblErr.message && (tblErr.message.includes("no such table") || tblErr.message.includes("does not exist"))) {
+      console.log("Database Migration: Creating document_locks table...");
+      await env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS document_locks (
+          lock_key TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          user_display_name TEXT NOT NULL,
+          locked_at TEXT NOT NULL,
+          expires_at TEXT NOT NULL
+        )
+      `).run();
+    }
+  }
+
+  // 4. message_pins テーブルが存在するか確認、なければ作成 (0004相当)
+  try {
+    await env.DB.prepare("SELECT 1 FROM message_pins LIMIT 1").all();
+  } catch (tblErr: any) {
+    if (tblErr.message && (tblErr.message.includes("no such table") || tblErr.message.includes("does not exist"))) {
+      console.log("Database Migration: Creating message_pins table...");
+      await env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS message_pins (
+          message_id TEXT PRIMARY KEY,
+          channel_id TEXT NOT NULL,
+          pinned_by TEXT NOT NULL,
+          pinned_at TEXT NOT NULL
+        )
+      `).run();
+    }
+  }
+
+  // 5. channel_stars テーブルが存在するか確認、なければ作成 (0004相当)
+  try {
+    await env.DB.prepare("SELECT 1 FROM channel_stars LIMIT 1").all();
+  } catch (tblErr: any) {
+    if (tblErr.message && (tblErr.message.includes("no such table") || tblErr.message.includes("does not exist"))) {
+      console.log("Database Migration: Creating channel_stars table...");
+      await env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS channel_stars (
+          user_id TEXT NOT NULL,
+          channel_id TEXT NOT NULL,
+          starred_at TEXT NOT NULL,
+          PRIMARY KEY (user_id, channel_id)
+        )
+      `).run();
+    }
+  }
+
+  // 6. messages_fts (FTS5) テーブルとトリガーが存在するか確認、なければ作成 (0005相当)
+  try {
+    await env.DB.prepare("SELECT 1 FROM messages_fts LIMIT 1").all();
+  } catch (tblErr: any) {
+    if (tblErr.message && (tblErr.message.includes("no such table") || tblErr.message.includes("does not exist"))) {
+      console.log("Database Migration: Creating messages_fts table and triggers...");
+      await env.DB.prepare(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+          message_id,
+          content,
+          tokenize='trigram'
+        )
+      `).run();
+
+      await env.DB.prepare(`
+        CREATE TRIGGER IF NOT EXISTS after_messages_insert AFTER INSERT ON messages BEGIN
+          INSERT INTO messages_fts(message_id, content) VALUES(new.id, new.content);
+        END
+      `).run();
+
+      await env.DB.prepare(`
+        CREATE TRIGGER IF NOT EXISTS after_messages_update AFTER UPDATE ON messages BEGIN
+          UPDATE messages_fts SET content = new.content WHERE message_id = old.id;
+        END
+      `).run();
+
+      await env.DB.prepare(`
+        CREATE TRIGGER IF NOT EXISTS after_messages_delete AFTER DELETE ON messages BEGIN
+          DELETE FROM messages_fts WHERE message_id = old.id;
+        END
+      `).run();
+
+      // 既存データの流し込み
+      try {
+        await env.DB.prepare(`
+          INSERT OR IGNORE INTO messages_fts (message_id, content)
+          SELECT id, content FROM messages
+        `).run();
+      } catch (dataErr) {
+        console.error("FTS messages sync failed:", dataErr);
+      }
+    }
+  }
+
+  // 7. documents_fts (FTS5) テーブルとトリガーが存在するか確認、なければ作成 (0005相当)
+  try {
+    await env.DB.prepare("SELECT 1 FROM documents_fts LIMIT 1").all();
+  } catch (tblErr: any) {
+    if (tblErr.message && (tblErr.message.includes("no such table") || tblErr.message.includes("does not exist"))) {
+      console.log("Database Migration: Creating documents_fts table and triggers...");
+      await env.DB.prepare(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
+          source_type,
+          source_id,
+          title,
+          content,
+          tokenize='trigram'
+        )
+      `).run();
+
+      await env.DB.prepare(`
+        CREATE TRIGGER IF NOT EXISTS after_workspaces_insert AFTER INSERT ON workspaces BEGIN
+          INSERT INTO documents_fts(source_type, source_id, title, content) VALUES('workspace', new.id, new.name, COALESCE(new.document, ''));
+        END
+      `).run();
+
+      await env.DB.prepare(`
+        CREATE TRIGGER IF NOT EXISTS after_workspaces_update AFTER UPDATE ON workspaces BEGIN
+          DELETE FROM documents_fts WHERE source_type = 'workspace' AND source_id = old.id;
+          INSERT INTO documents_fts(source_type, source_id, title, content) VALUES('workspace', new.id, new.name, COALESCE(new.document, ''));
+        END
+      `).run();
+
+      await env.DB.prepare(`
+        CREATE TRIGGER IF NOT EXISTS after_workspaces_delete AFTER DELETE ON workspaces BEGIN
+          DELETE FROM documents_fts WHERE source_type = 'workspace' AND source_id = old.id;
+        END
+      `).run();
+
+      await env.DB.prepare(`
+        CREATE TRIGGER IF NOT EXISTS after_channels_insert AFTER INSERT ON channels BEGIN
+          INSERT INTO documents_fts(source_type, source_id, title, content) VALUES('channel', new.id, new.name, COALESCE(new.document, ''));
+        END
+      `).run();
+
+      await env.DB.prepare(`
+        CREATE TRIGGER IF NOT EXISTS after_channels_update AFTER UPDATE ON channels BEGIN
+          DELETE FROM documents_fts WHERE source_type = 'channel' AND source_id = old.id;
+          INSERT INTO documents_fts(source_type, source_id, title, content) VALUES('channel', new.id, new.name, COALESCE(new.document, ''));
+        END
+      `).run();
+
+      await env.DB.prepare(`
+        CREATE TRIGGER IF NOT EXISTS after_channels_delete AFTER DELETE ON channels BEGIN
+          DELETE FROM documents_fts WHERE source_type = 'channel' AND source_id = old.id;
+        END
+      `).run();
+
+      // 既存データの流し込み
+      try {
+        await env.DB.prepare(`
+          INSERT OR IGNORE INTO documents_fts (source_type, source_id, title, content)
+          SELECT 'workspace', id, name, COALESCE(document, '') FROM workspaces
+        `).run();
+
+        await env.DB.prepare(`
+          INSERT OR IGNORE INTO documents_fts (source_type, source_id, title, content)
+          SELECT 'channel', id, name, COALESCE(document, '') FROM channels
+        `).run();
+      } catch (dataErr) {
+        console.error("FTS documents sync failed:", dataErr);
+      }
+    }
+  }
+
+  // 8. custom_emojis テーブルが存在するか確認、なければ作成 (0005相当)
+  try {
+    await env.DB.prepare("SELECT 1 FROM custom_emojis LIMIT 1").all();
+  } catch (tblErr: any) {
+    if (tblErr.message && (tblErr.message.includes("no such table") || tblErr.message.includes("does not exist"))) {
+      console.log("Database Migration: Creating custom_emojis table...");
+      await env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS custom_emojis (
+          id TEXT PRIMARY KEY,
+          workspace_id TEXT NOT NULL,
+          code TEXT NOT NULL,
+          url TEXT NOT NULL,
+          created_by TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+          FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
+          UNIQUE (workspace_id, code)
+        )
+      `).run();
+    }
+  }
+}
+
 async function ensureDatabaseInitialized(env: Env) {
   try {
     await env.DB.prepare("SELECT 1 FROM users LIMIT 1").all();
     
-    // 既存データベースへの自動カラム追加（動的マイグレーション）
-    try {
-      await env.DB.prepare("SELECT recovery_code_hash FROM users LIMIT 1").all();
-    } catch (colErr: any) {
-      if (colErr.message && (colErr.message.includes("no such column") || colErr.message.includes("has no column"))) {
-        console.log("Database Migration: Adding recovery_code_hash column to users table...");
-        await env.DB.prepare("ALTER TABLE users ADD COLUMN recovery_code_hash TEXT").run();
-      }
-    }
-
-    try {
-      await env.DB.prepare("SELECT language FROM users LIMIT 1").all();
-    } catch (colErr: any) {
-      if (colErr.message && (colErr.message.includes("no such column") || colErr.message.includes("has no column"))) {
-        console.log("Database Migration: Adding language column to users table...");
-        await env.DB.prepare("ALTER TABLE users ADD COLUMN language TEXT DEFAULT 'ja'").run();
-      }
-    }
-
-    // system_settings テーブルが存在するか確認、なければ作成
-    try {
-      await env.DB.prepare("SELECT 1 FROM system_settings LIMIT 1").all();
-    } catch (tblErr: any) {
-      if (tblErr.message && (tblErr.message.includes("no such table") || tblErr.message.includes("does not exist"))) {
-        console.log("Database Migration: Creating system_settings table...");
-        await env.DB.prepare(`
-          CREATE TABLE IF NOT EXISTS system_settings (
-              key TEXT PRIMARY KEY,
-              value TEXT NOT NULL,
-              created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-              updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-          )
-        `).run();
-      }
-    }
+    // 既存データベースに自動マイグレーションを実行
+    await runMigrations(env);
   } catch (e: any) {
     if (e.message && (e.message.includes("no such table") || e.message.includes("does not exist"))) {
       console.log("Database not initialized. Running initial schema...");
@@ -164,6 +358,9 @@ async function ensureDatabaseInitialized(env: Env) {
 
       await env.DB.batch(statements);
       console.log("Database initialized successfully.");
+      
+      // 初期化直後にも追加のマイグレーションを実行
+      await runMigrations(env);
     } else {
       throw e;
     }
