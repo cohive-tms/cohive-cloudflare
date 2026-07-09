@@ -1,4 +1,0 @@
-[submodule "frontend"]
-	path = frontend
-	url = https://github.com/cospace-tms/cospace-frontend.git
-	
