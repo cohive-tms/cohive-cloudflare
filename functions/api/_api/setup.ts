@@ -1,5 +1,5 @@
 import type { Env } from "../[[route]]";
-import { signJWT, generateRandomSecret, getJwtSecret } from "../_utils/jwt";
+import { signJWT, generateRandomSecret, getJwtSecret, serializeCookie } from "../_utils/jwt";
 
 export function generateRecoveryCode(): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -208,10 +208,25 @@ export async function handleSetupRegister(request: Request, env: Env): Promise<R
       secret = generateRandomSecret();
     }
 
-    const token = await signJWT(
-      { userId, exp: Math.floor(Date.now() / 1000) + (30 * 24 * 3600) },
+    const accessToken = await signJWT(
+      { userId, type: "access", exp: Math.floor(Date.now() / 1000) + 900 },
       secret
     );
+    const refreshToken = await signJWT(
+      { userId, type: "refresh", exp: Math.floor(Date.now() / 1000) + 30 * 24 * 3600 },
+      secret
+    );
+
+    const cookieValue = serializeCookie("refresh_token", refreshToken, {
+      maxAge: 30 * 24 * 3600,
+      path: "/api/auth",
+      httpOnly: true,
+      secure: true,
+      sameSite: "Lax",
+    });
+
+    const responseHeaders = new Headers(headers);
+    responseHeaders.append("Set-Cookie", cookieValue);
 
     return new Response(JSON.stringify({
       success: true,
@@ -220,12 +235,12 @@ export async function handleSetupRegister(request: Request, env: Env): Promise<R
         userId,
         workspaceId,
         defaultChannelId,
-        token,
+        token: accessToken,
         recoveryCode
       }
     }), {
       status: 201,
-      headers
+      headers: responseHeaders
     });
 
   } catch (error: any) {
