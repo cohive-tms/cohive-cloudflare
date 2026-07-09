@@ -19,36 +19,44 @@ import {
 import {
   handleGetWorkspaces,
   handleCreateWorkspace,
+  handleUpdateWorkspace,
+  handleDeleteWorkspace
+} from "./_api/chat/workspace";
+import {
   handleGetChannels,
   handleCreateChannel,
+  handleUpdateChannel,
+  handleDeleteChannel,
+  handleBrowseChannels
+} from "./_api/chat/channel";
+import {
   handleGetMessages,
   handleCreateMessage,
   handleGetMessagesGeneral,
   handleCreateMessageGeneral,
-  handleToggleReaction,
+  handleToggleReaction
+} from "./_api/chat/message";
+import {
+  handleGetGroups,
+  handleCreateGroup,
+  handleUpdateGroup,
+  handleDeleteGroup
+} from "./_api/chat/group";
+import {
   handleUpdateUser,
-  handleUpdateWorkspace,
-  handleDeleteWorkspace,
-  handleUpdateChannel,
-  handleDeleteChannel,
   handleGetWorkspaceMembers,
   handleAddWorkspaceMember,
   handleUpdateWorkspaceMember,
   handleDeleteWorkspaceMember,
   handleGetWorkspaceUserRole,
-  handleGetGroups,
-  handleCreateGroup,
-  handleUpdateGroup,
-  handleDeleteGroup,
   handleGetGroupMembers,
   handleAddGroupMember,
   handleUpdateGroupMember,
   handleDeleteGroupMember,
   handleGetChannelMembers,
   handleAddChannelMember,
-  handleDeleteChannelMember,
-  handleBrowseChannels
-} from "./_api/chat";
+  handleDeleteChannelMember
+} from "./_api/chat/member";
 import {
   handleGetNotifications,
   handleReadNotification,

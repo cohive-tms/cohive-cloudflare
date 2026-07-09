@@ -1,5 +1,5 @@
 import type { Env } from "../[[route]]";
-import { canAccessChannel } from "./chat";
+import { canAccessChannel } from "./chat/message";
 
 const headers = {
   "Content-Type": "application/json",

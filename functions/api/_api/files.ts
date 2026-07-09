@@ -75,6 +75,11 @@ export async function handleGetPresignedDownloadUrl(request: Request, env: Env):
   };
 
   try {
+    const userId = request.headers.get("X-User-Id");
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+
     const url = new URL(request.url);
     const objectKey = url.searchParams.get("key");
 
@@ -83,6 +88,97 @@ export async function handleGetPresignedDownloadUrl(request: Request, env: Env):
         status: 400,
         headers,
       });
+    }
+
+    // filesテーブルからファイル情報と紐づくチャンネル情報を取得して認可チェック
+    const fileInfo = await env.DB.prepare(`
+      SELECT f.workspace_id as workspaceId, f.channel_id as channelId, f.uploader_id as uploaderId, f.is_private as isPrivate,
+             c.is_private as isChannelPrivate, c.type as channelType, c.group_id as groupId
+      FROM files f
+      LEFT JOIN channels c ON f.channel_id = c.id
+      WHERE f.object_key = ?
+      LIMIT 1
+    `).bind(objectKey).first<{
+      workspaceId: string;
+      channelId: string | null;
+      uploaderId: string;
+      isPrivate: number;
+      isChannelPrivate: number | null;
+      channelType: string | null;
+      groupId: string | null;
+    }>();
+
+    if (fileInfo) {
+      // 1. ワークスペース所属チェック
+      const isWsMember = await env.DB.prepare(
+        "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+      ).bind(fileInfo.workspaceId, userId).first<{ role: string }>();
+
+      if (!isWsMember) {
+        return new Response(JSON.stringify({ error: "Forbidden: You are not a member of this workspace" }), { status: 403, headers });
+      }
+
+      // 閲覧権限チェック
+      let hasAccess = false;
+
+      // 自身がアップ主なら無条件でOK
+      if (fileInfo.uploaderId === userId) {
+        hasAccess = true;
+      }
+      // 管理者/グループ管理者は、DM以外のファイルであれば無条件でOK
+      else if (isWsMember.role === 'owner' || isWsMember.role === 'group_admin') {
+        if (!fileInfo.channelId || fileInfo.channelType !== 'dm') {
+          hasAccess = true;
+        }
+      }
+
+      // ゲストロールの場合は、自分がメンバーであるチャンネル（channel_members）のファイルのみ許可
+      if (!hasAccess && isWsMember.role === 'guest') {
+        if (fileInfo.channelId) {
+          const isChanMember = await env.DB.prepare(
+            "SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?"
+          ).bind(fileInfo.channelId, userId).first();
+          if (isChanMember) {
+            hasAccess = true;
+          }
+        }
+      }
+
+      // ゲスト以外の通常の追加チェック
+      if (!hasAccess && isWsMember.role !== 'guest' && fileInfo.channelId) {
+        const isPublic = (fileInfo.channelType === 'channel' || !fileInfo.channelType) && fileInfo.isChannelPrivate === 0;
+        if (isPublic) {
+          hasAccess = true;
+        } else {
+          // プライベートチャンネルメンバーシップチェック
+          const isChanMember = await env.DB.prepare(
+            "SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?"
+          ).bind(fileInfo.channelId, userId).first();
+
+          if (isChanMember) {
+            hasAccess = true;
+          } else if (fileInfo.groupId) {
+            const isGroupMem = await env.DB.prepare(
+              "SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?"
+            ).bind(fileInfo.groupId, userId).first();
+            if (isGroupMem) hasAccess = true;
+          }
+        }
+      }
+
+      // チャンネル未指定（ワークスペース全体）の場合のチェック（ゲストは対象外）
+      if (!hasAccess && isWsMember.role !== 'guest' && !fileInfo.channelId) {
+        // パブリックであればワークスペースメンバーならOK
+        if (fileInfo.isPrivate === 0) {
+          hasAccess = true;
+        }
+      }
+
+      if (!hasAccess) {
+        return new Response(JSON.stringify({ error: "Forbidden: Access denied" }), { status: 403, headers });
+      }
+    } else {
+      return new Response(JSON.stringify({ error: "File Not Found" }), { status: 404, headers });
     }
 
     const s3Client = getS3Client(env);
