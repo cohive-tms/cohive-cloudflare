@@ -55,7 +55,10 @@ import {
   handleDeleteGroupMember,
   handleGetChannelMembers,
   handleAddChannelMember,
-  handleDeleteChannelMember
+  handleDeleteChannelMember,
+  handleGetEmailChangeStatus,
+  handleRequestEmailChange,
+  handleConfirmEmailChange
 } from "./_api/chat/member";
 import {
   handleGetNotifications,
@@ -571,6 +574,15 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
     if (url.pathname === "/api/users/me" && method === "PUT") {
       return await handleUpdateUser(request, env);
+    }
+    if (url.pathname === "/api/users/email-change-status" && method === "GET") {
+      return await handleGetEmailChangeStatus(request, env);
+    }
+    if (url.pathname === "/api/users/email-change-request" && method === "POST") {
+      return await handleRequestEmailChange(request, env);
+    }
+    if (url.pathname === "/api/users/email-change-confirm" && method === "POST") {
+      return await handleConfirmEmailChange(request, env);
     }
     if (url.pathname === "/api/push/vapid-public-key" && method === "GET") {
       return await handleGetVapidPublicKey(request, env);

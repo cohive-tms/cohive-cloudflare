@@ -1,6 +1,7 @@
 import type { Env } from "../../[[route]]";
 import { sendMail, getSmtpSettings } from "../../_utils/smtp";
 import { canAccessChannel } from "./message";
+import { verifyPassword } from "../setup";
 
 const headers = {
   "Content-Type": "application/json",
@@ -838,3 +839,255 @@ export async function handleDeleteChannelMember(request: Request, env: Env, chan
     });
   }
 }
+
+// メールアドレス変更ステータス取得 API
+export async function handleGetEmailChangeStatus(request: Request, env: Env): Promise<Response> {
+  try {
+    const userId = request.headers.get("X-User-Id");
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "User unauthorized" }), {
+        status: 401,
+        headers,
+      });
+    }
+
+    const smtpSettings = await getSmtpSettings(env);
+    const isSmtpConfigured = !!smtpSettings;
+
+    // 保留中の変更リクエストがあるか確認
+    const pendingRequest = await env.DB.prepare(
+      "SELECT new_email, expires_at FROM email_change_requests WHERE user_id = ?"
+    ).bind(userId).first<{ new_email: string; expires_at: string }>();
+
+    let pendingChange = null;
+    if (pendingRequest) {
+      pendingChange = {
+        newEmail: pendingRequest.new_email,
+        expiresAt: pendingRequest.expires_at,
+      };
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      isSmtpConfigured,
+      pendingChange,
+    }), {
+      status: 200,
+      headers,
+    });
+  } catch (error: any) {
+    return new Response(JSON.stringify({ error: error.message || "Internal Server Error" }), {
+      status: 500,
+      headers,
+    });
+  }
+}
+
+// メールアドレス変更リクエスト API
+export async function handleRequestEmailChange(request: Request, env: Env): Promise<Response> {
+  try {
+    const userId = request.headers.get("X-User-Id");
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "User unauthorized" }), {
+        status: 401,
+        headers,
+      });
+    }
+
+    const body: any = await request.json();
+    const { newEmail, currentPassword } = body;
+
+    if (!newEmail || !currentPassword) {
+      return new Response(JSON.stringify({ error: "New email and password are required" }), {
+        status: 400,
+        headers,
+      });
+    }
+
+    // パスワードの確認
+    const user = await env.DB.prepare(
+      "SELECT password_hash, email FROM users WHERE id = ?"
+    ).bind(userId).first<{ password_hash: string; email: string }>();
+
+    if (!user || !user.password_hash) {
+      return new Response(JSON.stringify({ error: "User not found" }), {
+        status: 404,
+        headers,
+      });
+    }
+
+    const isPasswordValid = await verifyPassword(currentPassword, user.password_hash);
+    if (!isPasswordValid) {
+      return new Response(JSON.stringify({ error: "Incorrect password" }), {
+        status: 400,
+        headers,
+      });
+    }
+
+    // すでに同じメールアドレスの場合はエラー
+    if (user.email === newEmail) {
+      return new Response(JSON.stringify({ error: "New email must be different from current email" }), {
+        status: 400,
+        headers,
+      });
+    }
+
+    // 重複チェック
+    const emailExists = await env.DB.prepare(
+      "SELECT 1 FROM users WHERE email = ?"
+    ).bind(newEmail).first();
+
+    if (emailExists) {
+      return new Response(JSON.stringify({ error: "Email already in use" }), {
+        status: 400,
+        headers,
+      });
+    }
+
+    const smtpSettings = await getSmtpSettings(env);
+
+    if (!smtpSettings) {
+      // SMTP未設定なら即時変更
+      await env.DB.prepare(
+        "UPDATE users SET email = ?, updated_at = datetime('now') WHERE id = ?"
+      ).bind(newEmail, userId).run();
+
+      return new Response(JSON.stringify({
+        success: true,
+        emailUpdated: true,
+        newEmail,
+      }), {
+        status: 200,
+        headers,
+      });
+    } else {
+      // SMTP設定済みの場合は確認コード送信フロー
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15分後
+
+      // 一時変更要求の作成（既存があれば置換）
+      await env.DB.prepare(
+        "INSERT OR REPLACE INTO email_change_requests (user_id, new_email, verification_code, expires_at) VALUES (?, ?, ?, ?)"
+      ).bind(userId, newEmail, code, expiresAt).run();
+
+      // メールの送信
+      try {
+        await sendMail(smtpSettings, {
+          to: newEmail,
+          subject: "【CoHive】メールアドレス変更の確認コード",
+          text: `CoHive をご利用いただきありがとうございます。\n\nメールアドレスの変更リクエストを受け付けました。\n以下の確認コードをプロフィール画面に入力して、変更を完了してください。\n\n確認コード: ${code}\n有効期限: 15分（${new Date(expiresAt).toLocaleString("ja-JP")} まで）\n\nもしこの変更に心当たりがない場合は、このメールを無視してください。`,
+        });
+      } catch (mailError: any) {
+        console.error("Failed to send verification email:", mailError);
+        return new Response(JSON.stringify({ error: "Failed to send verification email: " + mailError.message }), {
+          status: 500,
+          headers,
+        });
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        emailUpdated: false,
+        newEmail,
+      }), {
+        status: 200,
+        headers,
+      });
+    }
+  } catch (error: any) {
+    return new Response(JSON.stringify({ error: error.message || "Internal Server Error" }), {
+      status: 500,
+      headers,
+    });
+  }
+}
+
+// メールアドレス変更確定 API
+export async function handleConfirmEmailChange(request: Request, env: Env): Promise<Response> {
+  try {
+    const userId = request.headers.get("X-User-Id");
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "User unauthorized" }), {
+        status: 401,
+        headers,
+      });
+    }
+
+    const body: any = await request.json();
+    const { code } = body;
+
+    if (!code) {
+      return new Response(JSON.stringify({ error: "Verification code is required" }), {
+        status: 400,
+        headers,
+      });
+    }
+
+    // 保留中のリクエストを取得
+    const pendingRequest = await env.DB.prepare(
+      "SELECT new_email, verification_code, expires_at FROM email_change_requests WHERE user_id = ?"
+    ).bind(userId).first<{ new_email: string; verification_code: string; expires_at: string }>();
+
+    if (!pendingRequest) {
+      return new Response(JSON.stringify({ error: "No pending email change request found" }), {
+        status: 400,
+        headers,
+      });
+    }
+
+    // 期限切れチェック
+    const isExpired = new Date(pendingRequest.expires_at).getTime() < Date.now();
+    if (isExpired) {
+      // 期限切れレコードの削除
+      await env.DB.prepare("DELETE FROM email_change_requests WHERE user_id = ?").bind(userId).run();
+      return new Response(JSON.stringify({ error: "Verification code has expired" }), {
+        status: 400,
+        headers,
+      });
+    }
+
+    // コードチェック
+    if (pendingRequest.verification_code !== code) {
+      return new Response(JSON.stringify({ error: "Invalid verification code" }), {
+        status: 400,
+        headers,
+      });
+    }
+
+    // 重複チェック（コード入力するまでの間に他者が登録した場合を想定）
+    const emailExists = await env.DB.prepare(
+      "SELECT 1 FROM users WHERE email = ?"
+    ).bind(pendingRequest.new_email).first();
+
+    if (emailExists) {
+      return new Response(JSON.stringify({ error: "Email already in use" }), {
+        status: 400,
+        headers,
+      });
+    }
+
+    // メールアドレスの更新
+    await env.DB.prepare(
+      "UPDATE users SET email = ?, updated_at = datetime('now') WHERE id = ?"
+    ).bind(pendingRequest.new_email, userId).run();
+
+    // 保留中リクエストの削除
+    await env.DB.prepare(
+      "DELETE FROM email_change_requests WHERE user_id = ?"
+    ).bind(userId).run();
+
+    return new Response(JSON.stringify({
+      success: true,
+      newEmail: pendingRequest.new_email,
+    }), {
+      status: 200,
+      headers,
+    });
+  } catch (error: any) {
+    return new Response(JSON.stringify({ error: error.message || "Internal Server Error" }), {
+      status: 500,
+      headers,
+    });
+  }
+}
+
