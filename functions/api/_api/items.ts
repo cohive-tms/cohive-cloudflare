@@ -1,5 +1,5 @@
 import type { Env } from "../[[route]]";
-import { canAccessChannel } from "./chat/message";
+import { canAccessChannel, sendPushToUsers } from "./chat/message";
 
 const headers = {
   "Content-Type": "application/json",
@@ -88,6 +88,13 @@ async function createTaskNotifications(
 
       if (batch.length > 0) {
         await env.DB.batch(batch);
+        
+        // Web Push の送信を追加
+        const userIds = Array.from(targetUserIds);
+        const title = `タスクにアサインされました`;
+        const content = `${senderName} さんがあなたをタスク「${item.title}」の担当者にアサインしました。`;
+        const linkUrl = `/items?item=${itemId}`;
+        await sendPushToUsers(env, userIds, title, content, linkUrl);
       }
     } else if (type === "task_done") {
       if (item.creatorId !== senderId) {
@@ -111,6 +118,13 @@ async function createTaskNotifications(
 
       if (batch.length > 0) {
         await env.DB.batch(batch);
+        
+        // Web Push の送信を追加
+        const userIds = Array.from(targetUserIds);
+        const title = `タスクが完了しました`;
+        const content = `${senderName} さんがタスク「${item.title || extraData?.title}」を完了（Done）にしました。`;
+        const linkUrl = `/items?item=${itemId}`;
+        await sendPushToUsers(env, userIds, title, content, linkUrl);
       }
     }
   } catch (err) {

@@ -1,7 +1,7 @@
 import type { Env } from "../../[[route]]";
 import { sendMail, getSmtpSettings } from "../../_utils/smtp";
-import { canAccessChannel } from "./message";
-import { verifyPassword } from "../setup";
+import { canAccessChannel, sendPushToUsers } from "./message";
+import { verifyPassword, hashPassword } from "../setup";
 
 const headers = {
   "Content-Type": "application/json",
@@ -134,11 +134,21 @@ export async function handleAddWorkspaceMember(request: Request, env: Env, works
 
     let userId = user?.id;
 
+    let tempPassword = "";
+
     if (!user) {
       // 存在しない場合は仮パスワードで自動生成
       userId = crypto.randomUUID();
       const displayName = email.split('@')[0];
-      const tempHash = "pbkdf2$100000$0000000000000000$0000000000000000000000000000000000000000000000000000000000000000";
+
+      // ランダム初期パスワード生成
+      const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+      for (let i = 0; i < 10; i++) {
+        const randomIndex = crypto.getRandomValues(new Uint8Array(1))[0] % chars.length;
+        tempPassword += chars[randomIndex];
+      }
+
+      const tempHash = await hashPassword(tempPassword);
 
       await env.DB.prepare(
         "INSERT INTO users (id, email, password_hash, display_name, language, created_at, updated_at) VALUES (?, ?, ?, ?, 'ja', datetime('now'), datetime('now'))"
@@ -174,10 +184,22 @@ export async function handleAddWorkspaceMember(request: Request, env: Env, works
         const url = new URL(request.url);
         const loginUrl = `${url.protocol}//${url.host}`;
 
+        let tempPasswordText = "";
+        let tempPasswordHtml = "";
+        if (tempPassword) {
+          tempPasswordText = `初期パスワード: ${tempPassword}\r\n※ログイン後、必ずパスワードの変更をお願いいたします。\r\n\r\n`;
+          tempPasswordHtml = `
+            <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 15px 0; border: 1px dashed #d1d5db;">
+              <p style="margin: 0; font-weight: bold; color: #1f2937;">初期パスワード: <span style="font-family: monospace; font-size: 16px; color: #4f46e5;">${tempPassword}</span></p>
+              <p style="margin: 5px 0 0 0; font-size: 12px; color: #6b7280;">※ログイン後、右上メニューの「設定」から必ずパスワードを変更してください。</p>
+            </div>
+          `;
+        }
+
         await sendMail(smtpSettings, {
           to: email,
           subject: `[Cohive] ${workspaceName} ワークスペースへの招待`,
-          text: `こんにちは。\r\n\r\n${workspaceName} ワークスペースへの招待が届きました。\r\n以下のリンクからログインしてください。\r\n\r\nログインURL: ${loginUrl}\r\n\r\n※初めてのログインの際は、管理者から発行された初期パスワードをご使用ください。ログイン後、右上の設定よりパスワードの変更をお願いいたします。`,
+          text: `こんにちは。\r\n\r\n${workspaceName} ワークスペースへの招待が届きました。\r\n以下のリンクからログインしてください。\r\n\r\nログインURL: ${loginUrl}\r\n\r\n${tempPasswordText}※初めてのログインの際は、管理者から発行された初期パスワードをご使用ください。ログイン後、右上の設定よりパスワードの変更をお願いいたします。`,
           html: `
             <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eaeaea; border-radius: 5px; max-width: 600px; margin: 0 auto;">
               <h2 style="color: #4f46e5;">Cohive 招待のお知らせ</h2>
@@ -188,6 +210,7 @@ export async function handleAddWorkspaceMember(request: Request, env: Env, works
                    Cohive にログインする
                 </a>
               </div>
+              ${tempPasswordHtml}
               <p style="color: #6b7280; font-size: 13px; line-height: 1.5; border-top: 1px solid #eee; padding-top: 15px;">
                 ※初めてログインする場合は、管理者から発行された初期パスワードをご入力ください。ログイン後、右上メニューの「設定」からパスワードを新しいものへ変更することをお勧めします。
               </p>
@@ -197,6 +220,37 @@ export async function handleAddWorkspaceMember(request: Request, env: Env, works
       } catch (mailErr) {
         console.error("Failed to send invitation email:", mailErr);
       }
+    }
+
+    // ワークスペース招待通知の作成（DB ＆ Web Push）
+    try {
+      const operatorId = request.headers.get("X-User-Id");
+      if (operatorId && userId) {
+        const operator = await env.DB.prepare(
+          "SELECT display_name FROM users WHERE id = ?"
+        ).bind(operatorId).first<{ display_name: string }>();
+        const operatorName = operator?.display_name || "管理者";
+
+        const workspace = await env.DB.prepare(
+          "SELECT name FROM workspaces WHERE id = ?"
+        ).bind(workspaceId).first<{ name: string }>();
+        const workspaceName = workspace?.name || "ワークスペース";
+
+        const notificationId = crypto.randomUUID();
+        const title = `ワークスペースに招待されました`;
+        const content = `${operatorName} さんがあなたを ワークスペース「${workspaceName}」に招待しました。`;
+        const linkUrl = `/`;
+
+        // 1. DB通知の保存
+        await env.DB.prepare(
+          "INSERT INTO notifications (id, workspace_id, user_id, sender_id, type, title, content, link_url) VALUES (?, ?, ?, ?, 'invite', ?, ?, ?)"
+        ).bind(notificationId, workspaceId, userId, operatorId, title, content, linkUrl);
+
+        // 2. Web Pushの送信
+        await sendPushToUsers(env, [userId], title, content, linkUrl);
+      }
+    } catch (notificationErr) {
+      console.error("Failed to create workspace invite notification:", notificationErr);
     }
 
     const addedUser = await env.DB.prepare(
@@ -745,6 +799,36 @@ export async function handleAddChannelMember(request: Request, env: Env, channel
     await env.DB.prepare(
       "INSERT INTO channel_members (channel_id, user_id, created_at) VALUES (?, ?, datetime('now'))"
     ).bind(channelId, userId).run();
+
+    // チャンネル招待通知の作成（DB ＆ Web Push）
+    try {
+      if (operatorId && userId) {
+        const operator = await env.DB.prepare(
+          "SELECT display_name FROM users WHERE id = ?"
+        ).bind(operatorId).first<{ display_name: string }>();
+        const operatorName = operator?.display_name || "誰か";
+
+        const channelDetails = await env.DB.prepare(
+          "SELECT name FROM channels WHERE id = ?"
+        ).bind(channelId).first<{ name: string }>();
+        const channelName = channelDetails?.name || "チャット";
+
+        const notificationId = crypto.randomUUID();
+        const title = `チャンネルに招待されました`;
+        const content = `${operatorName} さんがあなたを チャンネル「#${channelName}」に招待しました。`;
+        const linkUrl = `/channels/${channelId}`;
+
+        // 1. DB通知の保存
+        await env.DB.prepare(
+          "INSERT INTO notifications (id, workspace_id, user_id, sender_id, type, title, content, link_url) VALUES (?, ?, ?, ?, 'invite', ?, ?, ?)"
+        ).bind(notificationId, channel.workspaceId, userId, operatorId, title, content, linkUrl);
+
+        // 2. Web Pushの送信
+        await sendPushToUsers(env, [userId], title, content, linkUrl);
+      }
+    } catch (notificationErr) {
+      console.error("Failed to create channel invite notification:", notificationErr);
+    }
 
     const user = await env.DB.prepare(`
       SELECT 

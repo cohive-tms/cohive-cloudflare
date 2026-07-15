@@ -75,7 +75,7 @@ export async function canAccessChannel(env: Env, channelId: string, userId: stri
 }
 
 // 複数のユーザー宛に Web Push を非同期で送信するヘルパー
-async function sendPushToUsers(
+export async function sendPushToUsers(
   env: Env,
   userIds: string[],
   title: string,

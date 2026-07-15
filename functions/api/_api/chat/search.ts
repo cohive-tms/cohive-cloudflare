@@ -7,6 +7,47 @@ const headers = {
   "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id",
 };
 
+// 簡易スニペット生成関数（マッチした単語の周辺を切り取る ＆ ハイライト）
+function createSnippet(content: string, words: string[]): string {
+  if (!content) return "";
+  const lowerContent = content.toLowerCase();
+  
+  // 最初に一致したキーワードの位置を探す
+  let firstIdx = -1;
+  let matchedWord = "";
+  for (const word of words) {
+    const idx = lowerContent.indexOf(word.toLowerCase());
+    if (idx !== -1) {
+      if (firstIdx === -1 || idx < firstIdx) {
+        firstIdx = idx;
+        matchedWord = word;
+      }
+    }
+  }
+  
+  // 一致する単語がない場合は先頭から100文字を返す
+  if (firstIdx === -1) {
+    return content.substring(0, 100) + (content.length > 100 ? "..." : "");
+  }
+  
+  // 一致箇所の前後を切り取る
+  const start = Math.max(0, firstIdx - 30);
+  const end = Math.min(content.length, firstIdx + matchedWord.length + 50);
+  
+  let snippet = content.substring(start, end);
+  if (start > 0) snippet = "..." + snippet;
+  if (end < content.length) snippet = snippet + "...";
+  
+  // マッチした単語を <mark> タグで囲む（ハイライト用）
+  for (const word of words) {
+    const escapedWord = word.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const regex = new RegExp(escapedWord, 'gi');
+    snippet = snippet.replace(regex, (match) => `<mark>${match}</mark>`);
+  }
+  
+  return snippet;
+}
+
 // ワークスペース内横断全文検索 API
 export async function handleSearchWorkspace(
   request: Request,
@@ -39,11 +80,34 @@ export async function handleSearchWorkspace(
       });
     }
 
-    // 複数単語対応のFTS5用クエリ式フォーマット
+    // 複数単語のパース (スペース区切り)
     const words = queryParam.trim().split(/\s+/).filter(w => w.length > 0);
-    const formattedQuery = words.map(w => `"${w}"`).join(" AND ");
+    if (words.length === 0) {
+      return new Response(JSON.stringify({ success: true, data: { messages: [], documents: [] } }), {
+        status: 200,
+        headers,
+      });
+    }
 
-    // 1. メッセージ全文検索 (閲覧可能なチャンネルのみ)
+    // 1. LIKE 複合条件の構築 (メッセージ)
+    // 本文(content)、送信者名(displayName)、チャンネル名(channelName) のいずれかにキーワードが全て(AND)含まれるものを検索
+    const contentLikes = words.map(() => "m.content LIKE ?").join(" AND ");
+    const userLikes = words.map(() => "u.display_name LIKE ?").join(" AND ");
+    const channelLikes = words.map(() => "c.name LIKE ?").join(" AND ");
+    
+    const messageWhereClause = `(${contentLikes}) OR (${userLikes}) OR (${channelLikes})`;
+    const likeParams = words.map(w => `%${w}%`);
+
+    // バインドパラメータの構築 (workspaceId, userId, contentワード..., userワード..., channelワード...)
+    const messageBindParams = [
+      workspaceId,
+      userId,
+      ...likeParams,
+      ...likeParams,
+      ...likeParams
+    ];
+
+    // メッセージ検索クエリの実行
     const messageResults = await env.DB.prepare(`
       SELECT 
         m.id,
@@ -53,10 +117,8 @@ export async function handleSearchWorkspace(
         u.display_name as userDisplayName,
         m.content,
         m.created_at as createdAt,
-        snippet(messages_fts, 1, '<mark>', '</mark>', '...', 20) as snippet,
         (CASE WHEN pm.message_id IS NOT NULL THEN 1 ELSE 0 END) as isPinned
-      FROM messages_fts fts
-      INNER JOIN messages m ON fts.message_id = m.id
+      FROM messages m
       INNER JOIN channels c ON m.channel_id = c.id
       LEFT JOIN users u ON m.user_id = u.id
       LEFT JOIN message_pins pm ON m.id = pm.message_id
@@ -67,19 +129,34 @@ export async function handleSearchWorkspace(
             SELECT 1 FROM channel_members cm WHERE cm.channel_id = c.id AND cm.user_id = ?
           )
         )
-        AND messages_fts MATCH ?
+        AND (${messageWhereClause})
       ORDER BY m.created_at DESC
       LIMIT 100
-    `).bind(workspaceId, userId, formattedQuery).all<any>();
+    `).bind(...messageBindParams).all<any>();
 
-    // 2. ドキュメント全文検索 (閲覧可能なワークスペース/チャンネルドキュメントのみ)
+    // 2. LIKE 複合条件の構築 (ドキュメント)
+    // タイトル(title)、または本文(content)にキーワードが全て(AND)含まれるものを検索
+    const docTitleLikes = words.map(() => "fts.title LIKE ?").join(" AND ");
+    const docContentLikes = words.map(() => "fts.content LIKE ?").join(" AND ");
+    
+    const documentWhereClause = `(${docTitleLikes}) OR (${docContentLikes})`;
+    
+    // バインドパラメータの構築 (workspaceId, workspaceId, userId, titleワード..., contentワード...)
+    const documentBindParams = [
+      workspaceId,
+      workspaceId,
+      userId,
+      ...likeParams,
+      ...likeParams
+    ];
+
+    // ドキュメント検索クエリの実行
     const documentResults = await env.DB.prepare(`
       SELECT 
         fts.source_type as sourceType,
         fts.source_id as sourceId,
         fts.title,
-        fts.content,
-        snippet(documents_fts, 3, '<mark>', '</mark>', '...', 20) as snippet
+        fts.content
       FROM documents_fts fts
       WHERE (
         -- ワークスペースドキュメント
@@ -98,9 +175,9 @@ export async function handleSearchWorkspace(
             )
         ))
       )
-      AND documents_fts MATCH ?
+      AND (${documentWhereClause})
       LIMIT 50
-    `).bind(workspaceId, workspaceId, userId, formattedQuery).all<any>();
+    `).bind(...documentBindParams).all<any>();
 
     return new Response(JSON.stringify({
       success: true,
@@ -113,7 +190,7 @@ export async function handleSearchWorkspace(
           userDisplayName: row.userDisplayName || "Unknown User",
           content: row.content,
           createdAt: row.createdAt,
-          snippet: row.snippet || row.content,
+          snippet: createSnippet(row.content, words),
           isPinned: !!row.isPinned,
         })),
         documents: documentResults.results.map((row: any) => ({
@@ -121,7 +198,7 @@ export async function handleSearchWorkspace(
           sourceId: row.sourceId,
           title: row.title,
           content: row.content,
-          snippet: row.snippet || row.content,
+          snippet: createSnippet(row.content, words),
         })),
       }
     }), {
