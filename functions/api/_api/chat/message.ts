@@ -75,15 +75,16 @@ export async function canAccessChannel(env: Env, channelId: string, userId: stri
 }
 
 // 複数のユーザー宛に Web Push を非同期で送信するヘルパー
+// 複数のユーザー宛に Web Push を非同期で送信するヘルパー
 export async function sendPushToUsers(
   env: Env,
   userIds: string[],
   title: string,
   bodyText: string,
   linkUrl: string
-): Promise<void> {
+): Promise<{ userId: string; success: boolean; error?: string }[]> {
   try {
-    if (userIds.length === 0) return;
+    if (userIds.length === 0) return [];
 
     // 1. D1からVAPIDキーを取得
     const vapidKey = await env.DB.prepare(
@@ -92,7 +93,7 @@ export async function sendPushToUsers(
 
     if (!vapidKey) {
       console.log("Web Push: VAPID keys not generated yet. Skipping push notification.");
-      return;
+      return userIds.map(id => ({ userId: id, success: false, error: "VAPID keys not generated yet" }));
     }
 
     // 2. 送信対象ユーザーのサブスクリプションをすべて取得
@@ -103,7 +104,16 @@ export async function sendPushToUsers(
       .bind(...userIds)
       .all<{ userId: string; endpoint: string; p256dh: string; auth: string }>();
 
-    if (!subscriptions || subscriptions.length === 0) return;
+    if (!subscriptions || subscriptions.length === 0) {
+      return userIds.map(id => ({ userId: id, success: false, error: "No active push subscription found in DB" }));
+    }
+
+    // 管理者（または最初のユーザー）のメールアドレスを取得して VAPID の sub に使用する（実在しないローカルドメインによるFCMのBadJwtTokenエラー防止）
+    const adminUser = await env.DB.prepare(
+      "SELECT email FROM users LIMIT 1"
+    ).first<{ email: string }>();
+    const adminEmail = adminUser?.email || "admin@cohive.dev";
+    const subject = `mailto:${adminEmail}`;
 
     // 3. 各サブスクリプションへプッシュ通知を送信
     const payload = JSON.stringify({
@@ -124,7 +134,12 @@ export async function sendPushToUsers(
         const res = await sendWebPush(subFormat, payload, {
           publicKey: vapidKey.public_key,
           privateKey: vapidKey.private_key
-        });
+        }, subject);
+
+        if (res.status >= 400) {
+          const errText = await res.text().catch(() => "");
+          throw new Error(`Push service returned status ${res.status}: ${errText}`);
+        }
 
         // 購読切れ（410 Gone / 404 Not Found）の場合はDBから削除する
         if (res.status === 410 || res.status === 404) {
@@ -133,14 +148,17 @@ export async function sendPushToUsers(
             .bind(sub.endpoint)
             .run();
         }
-      } catch (err) {
+        return { userId: sub.userId, success: true };
+      } catch (err: any) {
         console.error(`Failed to send web push to user ${sub.userId}:`, err);
+        return { userId: sub.userId, success: false, error: err.message || String(err) };
       }
     });
 
-    await Promise.all(pushPromises);
-  } catch (err) {
+    return await Promise.all(pushPromises);
+  } catch (err: any) {
     console.error("Failed in sendPushToUsers:", err);
+    return userIds.map(id => ({ userId: id, success: false, error: err.message || String(err) }));
   }
 }
 

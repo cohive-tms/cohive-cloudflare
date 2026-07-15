@@ -29,7 +29,7 @@ function base64UrlEncode(bytes: Uint8Array): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
-async function createVapidJwt(privateKeyJwk: any, audience: string): Promise<string> {
+async function createVapidJwt(privateKeyJwk: any, audience: string, subject: string): Promise<string> {
   const jwtSecret = await crypto.subtle.importKey(
     "jwk",
     privateKeyJwk,
@@ -42,7 +42,7 @@ async function createVapidJwt(privateKeyJwk: any, audience: string): Promise<str
   const payload = {
     aud: audience,
     exp: Math.floor(Date.now() / 1000) + 12 * 60 * 60, // 12時間有効
-    sub: "mailto:admin@cohive.local"
+    sub: subject
   };
 
   const headerEncoded = base64UrlEncode(new TextEncoder().encode(JSON.stringify(header)));
@@ -191,14 +191,15 @@ async function encryptPayload(
 export async function sendWebPush(
   subscription: WebPushSubscription,
   payload: string,
-  vapidKey: { publicKey: string; privateKey: string }
+  vapidKey: { publicKey: string; privateKey: string },
+  subject: string = "mailto:admin@cohive.dev"
 ): Promise<Response> {
   const endpointUrl = new URL(subscription.endpoint);
   const audience = endpointUrl.origin;
 
   // JWTの作成
   const privateKeyJwk = JSON.parse(vapidKey.privateKey);
-  const jwt = await createVapidJwt(privateKeyJwk, audience);
+  const jwt = await createVapidJwt(privateKeyJwk, audience, subject);
 
   // ペイロード暗号化
   const { body } = await encryptPayload(payload, subscription.keys);
@@ -219,7 +220,7 @@ export async function sendWebPush(
     "TTL": "86400", // 24時間保持
     "Content-Encoding": "aes128gcm",
     "Content-Type": "application/octet-stream",
-    "Authorization": `vapid t=${jwt},k=${base64UrlPubKey}`
+    "Authorization": `vapid t=${jwt}, k=${base64UrlPubKey}`
   };
 
   const response = await fetch(subscription.endpoint, {

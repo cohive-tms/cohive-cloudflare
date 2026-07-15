@@ -123,14 +123,108 @@ export async function handleSendTestPush(request: Request, env: Env): Promise<Re
     const content = "プッシュ通知の設定が正しく完了しました！";
     const linkUrl = "/";
 
-    await sendPushToUsers(env, [userId], title, content, linkUrl);
+    const results = await sendPushToUsers(env, [userId], title, content, linkUrl);
+    
+    if (results.length === 0) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: "プッシュ通知の購読登録が見つかりませんでした。設定画面から通知を有効にしてください。" 
+      }), {
+        status: 200,
+        headers,
+      });
+    }
+
+    const successCount = results.filter(r => r.success).length;
+
+    if (successCount === 0) {
+      const failed = results[0];
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: `すべてのデバイスへのプッシュ送信に失敗しました: ${failed.error}` 
+      }), {
+        status: 200,
+        headers,
+      });
+    }
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: `テスト通知を送信しました（送信成功: ${successCount}台 / 送信対象: ${results.length}台）。` 
+    }), {
+      status: 200,
+      headers,
+    });
+  } catch (err: any) {
+    console.error("Failed to send test push:", err);
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers,
+    });
+  }
+}
+
+// 4. 全デバイスの購読情報をクリア
+export async function handleUnsubscribeAll(request: Request, env: Env): Promise<Response> {
+  try {
+    const userId = request.headers.get("X-User-Id");
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "User unauthorized" }), {
+        status: 401,
+        headers,
+      });
+    }
+
+    await env.DB.prepare("DELETE FROM push_subscriptions WHERE user_id = ?")
+      .bind(userId)
+      .run();
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers,
     });
   } catch (err: any) {
-    console.error("Failed to send test push:", err);
+    console.error("Failed to unsubscribe all:", err);
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers,
+    });
+  }
+}
+
+// 5. 特定の購読エンドポイントがDBに登録されているか確認
+export async function handleCheckRegistration(request: Request, env: Env): Promise<Response> {
+  try {
+    const userId = request.headers.get("X-User-Id");
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "User unauthorized" }), {
+        status: 401,
+        headers,
+      });
+    }
+
+    const body: any = await request.json();
+    const { endpoint } = body;
+
+    if (!endpoint) {
+      return new Response(JSON.stringify({ error: "Endpoint is required" }), {
+        status: 400,
+        headers,
+      });
+    }
+
+    const result = await env.DB.prepare(
+      "SELECT 1 FROM push_subscriptions WHERE user_id = ? AND endpoint = ?"
+    )
+      .bind(userId, endpoint)
+      .first();
+
+    return new Response(JSON.stringify({ registered: !!result }), {
+      status: 200,
+      headers,
+    });
+  } catch (err: any) {
+    console.error("Failed to check registration:", err);
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
       headers,
