@@ -90,22 +90,19 @@ export async function handleSearchWorkspace(
     }
 
     // 1. LIKE 複合条件の構築 (メッセージ)
-    // 本文(content)、送信者名(displayName)、チャンネル名(channelName) のいずれかにキーワードが全て(AND)含まれるものを検索
-    const contentLikes = words.map(() => "m.content LIKE ?").join(" AND ");
-    const userLikes = words.map(() => "u.display_name LIKE ?").join(" AND ");
-    const channelLikes = words.map(() => "c.name LIKE ?").join(" AND ");
+    // 各キーワードが、本文(content)・送信者名(displayName)・チャンネル名(channelName)のいずれかに含まれる（AND）
+    const messageConditions = words.map(() => "(m.content LIKE ? OR u.display_name LIKE ? OR c.name LIKE ?)");
+    const messageWhereClause = messageConditions.join(" AND ");
     
-    const messageWhereClause = `(${contentLikes}) OR (${userLikes}) OR (${channelLikes})`;
-    const likeParams = words.map(w => `%${w}%`);
-
-    // バインドパラメータの構築 (workspaceId, userId, contentワード..., userワード..., channelワード...)
-    const messageBindParams = [
+    // バインドパラメータの構築 (workspaceId, userId, (word1, word1, word1), (word2, word2, word2)...)
+    const messageBindParams: any[] = [
       workspaceId,
-      userId,
-      ...likeParams,
-      ...likeParams,
-      ...likeParams
+      userId
     ];
+    words.forEach(w => {
+      const likeVal = `%${w}%`;
+      messageBindParams.push(likeVal, likeVal, likeVal);
+    });
 
     // メッセージ検索クエリの実行
     const messageResults = await env.DB.prepare(`
@@ -135,20 +132,20 @@ export async function handleSearchWorkspace(
     `).bind(...messageBindParams).all<any>();
 
     // 2. LIKE 複合条件の構築 (ドキュメント)
-    // タイトル(title)、または本文(content)にキーワードが全て(AND)含まれるものを検索
-    const docTitleLikes = words.map(() => "fts.title LIKE ?").join(" AND ");
-    const docContentLikes = words.map(() => "fts.content LIKE ?").join(" AND ");
+    // 各キーワードが、タイトル(title)・本文(content)のいずれかに含まれる（AND）
+    const documentConditions = words.map(() => "(fts.title LIKE ? OR fts.content LIKE ?)");
+    const documentWhereClause = documentConditions.join(" AND ");
     
-    const documentWhereClause = `(${docTitleLikes}) OR (${docContentLikes})`;
-    
-    // バインドパラメータの構築 (workspaceId, workspaceId, userId, titleワード..., contentワード...)
-    const documentBindParams = [
+    // バインドパラメータの構築 (workspaceId, workspaceId, userId, (word1, word1), (word2, word2)...)
+    const documentBindParams: any[] = [
       workspaceId,
       workspaceId,
-      userId,
-      ...likeParams,
-      ...likeParams
+      userId
     ];
+    words.forEach(w => {
+      const likeVal = `%${w}%`;
+      documentBindParams.push(likeVal, likeVal);
+    });
 
     // ドキュメント検索クエリの実行
     const documentResults = await env.DB.prepare(`

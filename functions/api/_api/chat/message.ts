@@ -222,7 +222,8 @@ async function createMessageNotifications(
       });
     } else {
       wsMembers.forEach(m => {
-        if (m.userId !== senderId && content.includes(`@${m.displayName}`)) {
+        const name = m.displayName || m.email.split('@')[0];
+        if (m.userId !== senderId && content.includes(`@${name}`)) {
           targetUserIds.add(m.userId);
         }
       });
