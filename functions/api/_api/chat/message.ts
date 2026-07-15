@@ -502,10 +502,12 @@ export async function handleCreateMessage(request: Request, env: Env, channelId:
     // 添付ファイルをメディアライブラリ（filesテーブル）に登録・更新
     await linkFileToMessage(env, sanitizedFileUrl, fileName, fileSize, channelId, messageId, userId);
 
-    // 非同期で通知を作成（バックグラウンド実行）
-    createMessageNotifications(env, messageId, channelId, userId, sanitizedContent, request.url).catch(err => {
+    // 通知を作成
+    try {
+      await createMessageNotifications(env, messageId, channelId, userId, sanitizedContent, request.url);
+    } catch (err) {
       console.error("Failed to create message notifications:", err);
-    });
+    }
 
     return new Response(JSON.stringify({
       success: true,
@@ -701,10 +703,12 @@ export async function handleCreateMessageGeneral(request: Request, env: Env): Pr
     // 添付ファイルをメディアライブラリ（filesテーブル）に登録・更新
     await linkFileToMessage(env, sanitizedFileUrl, fileName, fileSize, channelId, messageId, userId);
 
-    // 非同期で通知を作成（バックグラウンド実行）
-    createMessageNotifications(env, messageId, channelId, userId, sanitizedContent, request.url).catch(err => {
+    // 通知を作成
+    try {
+      await createMessageNotifications(env, messageId, channelId, userId, sanitizedContent, request.url);
+    } catch (err) {
       console.error("Failed to create message notifications:", err);
-    });
+    }
 
     return new Response(JSON.stringify({
       success: true,
