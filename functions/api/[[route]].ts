@@ -537,7 +537,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   let authenticatedUserId: string | null = null;
 
-  if (!isPublicRoute) {
+  const isApiRoute = url.pathname.startsWith("/api/");
+  if (isApiRoute && !isPublicRoute) {
     const authHeader = request.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Authorization token required" }), {
