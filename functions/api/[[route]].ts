@@ -101,7 +101,7 @@ import {
   handleStarChannel,
   handleUnstarChannel
 } from "./_api/pins_and_stars";
-import { handleGetVapidPublicKey, handleSubscribe } from "./_api/push";
+import { handleGetVapidPublicKey, handleSubscribe, handleSendTestPush } from "./_api/push";
 
 export interface Env {
   DB: D1Database;
@@ -642,6 +642,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
     if (url.pathname === "/api/push/subscribe" && method === "POST") {
       return await handleSubscribe(request, env);
+    }
+    if (url.pathname === "/api/push/test" && method === "POST") {
+      return await handleSendTestPush(request, env);
     }
 
     // 2. R2 ファイル添付関連 API (S3 署名付きURL)

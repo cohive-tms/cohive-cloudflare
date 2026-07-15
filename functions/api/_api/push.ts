@@ -105,3 +105,35 @@ export async function handleSubscribe(request: Request, env: Env): Promise<Respo
     });
   }
 }
+
+// 3. テスト用のWeb Pushプッシュ通知送信
+import { sendPushToUsers } from "./chat/message";
+
+export async function handleSendTestPush(request: Request, env: Env): Promise<Response> {
+  try {
+    const userId = request.headers.get("X-User-Id");
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "User unauthorized" }), {
+        status: 401,
+        headers,
+      });
+    }
+
+    const title = "Cohive テスト通知";
+    const content = "プッシュ通知の設定が正しく完了しました！";
+    const linkUrl = "/";
+
+    await sendPushToUsers(env, [userId], title, content, linkUrl);
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers,
+    });
+  } catch (err: any) {
+    console.error("Failed to send test push:", err);
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers,
+    });
+  }
+}
