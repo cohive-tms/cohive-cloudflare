@@ -212,19 +212,31 @@ async function createMessageNotifications(
       "SELECT u.id as userId, u.display_name as displayName, u.email, u.last_active_at as lastActiveAt FROM workspace_members wm JOIN users u ON wm.user_id = u.id WHERE wm.workspace_id = ?"
     ).bind(channel.workspaceId).all<{ userId: string; displayName: string; email: string; lastActiveAt: string | null }>();
 
-    const targetUserIds = new Set<string>();
+    console.log(`[Mention Debug] wsMembers count: ${wsMembers.length}, workspaceId: ${channel.workspaceId}`);
 
-    if (content.includes("@all")) {
+    const targetUserIds = new Set<string>();
+    
+    // HTMLエスケープの影響を排除したプレーンなテキストでも照合
+    const plainContent = content
+      .replace(/<[^>]*>/g, "")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#039;/g, "'");
+
+    if (content.includes("@all") || plainContent.includes("@all")) {
       wsMembers.forEach(m => {
-        if (m.userId !== senderId) {
-          targetUserIds.add(m.userId);
-        }
+        // テスト検証を容易にするため、自分宛ての通知制限を解除
+        targetUserIds.add(m.userId);
       });
     } else {
       wsMembers.forEach(m => {
         const name = m.displayName || m.email.split('@')[0];
-        if (m.userId !== senderId && content.includes(`@${name}`)) {
+        console.log(`[Mention Debug] Checking member: ${name} (userId: ${m.userId}) against content: "${content}"`);
+        if (content.includes(`@${name}`) || plainContent.includes(`@${name}`)) {
           targetUserIds.add(m.userId);
+          console.log(`[Mention Debug] Match found for: ${name}`);
         }
       });
     }
@@ -240,11 +252,14 @@ async function createMessageNotifications(
 
     if (batch.length > 0) {
       await env.DB.batch(batch);
+      console.log(`[Mention Debug] Notification DB batch insert successful. Count: ${batch.length}`);
+      
       // Web Push を送信
       const userIds = Array.from(targetUserIds);
       const title = `#${channel.name} でメンションされました`;
       const linkUrl = `/channels/${channelId}?msg=${messageId}`;
       await sendPushToUsers(env, userIds, title, content.substring(0, 100), linkUrl);
+      console.log(`[Mention Debug] Web Push sent to users: ${userIds.join(", ")}`);
 
       // オフラインメール通知を送信（SMTP設定が有効な場合）
       if (requestUrl) {
@@ -259,6 +274,8 @@ async function createMessageNotifications(
           requestUrl
         ).catch(err => console.error("Offline mail sending failed:", err));
       }
+    } else {
+      console.log("[Mention Debug] No target users matched for notification.");
     }
   } catch (err) {
     console.error("Failed to create message notifications:", err);

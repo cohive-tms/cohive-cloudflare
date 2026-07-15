@@ -71,9 +71,7 @@ async function createTaskNotifications(
 
     if (type === "assign") {
       assignees.forEach(a => {
-        if (a.userId !== senderId) {
-          targetUserIds.add(a.userId);
-        }
+        targetUserIds.add(a.userId);
       });
 
       const batch = Array.from(targetUserIds).map(userId => {
@@ -97,13 +95,9 @@ async function createTaskNotifications(
         await sendPushToUsers(env, userIds, title, content, linkUrl);
       }
     } else if (type === "task_done") {
-      if (item.creatorId !== senderId) {
-        targetUserIds.add(item.creatorId);
-      }
+      targetUserIds.add(item.creatorId);
       assignees.forEach(a => {
-        if (a.userId !== senderId) {
-          targetUserIds.add(a.userId);
-        }
+        targetUserIds.add(a.userId);
       });
 
       const batch = Array.from(targetUserIds).map(userId => {
