@@ -2,6 +2,7 @@ import { Env } from "../[[route]]";
 
 export interface WorkspaceLimit {
   plan: string;
+  planName?: string;
   storageLimit: number;
   storageUsed: number;
   memberLimit: number;
@@ -36,39 +37,36 @@ export async function getWorkspaceSubscription(env: Env, workspaceId: string): P
     return defaultLimit;
   }
 
-  try {
-    // 1. 使用状況をカウント
-    
-    // ストレージ使用量 (files テーブルの合計サイズ)
-    const storageResult = await env.DB.prepare(
-      "SELECT SUM(file_size) as total FROM files WHERE workspace_id = ?"
-    ).bind(workspaceId).first<{ total: number | null }>();
-    defaultLimit.storageUsed = storageResult?.total || 0;
-
-    // メンバー数
-    const memberResult = await env.DB.prepare(
-      "SELECT COUNT(*) as count FROM workspace_members WHERE workspace_id = ?"
-    ).bind(workspaceId).first<{ count: number }>();
-    defaultLimit.memberUsed = memberResult?.count || 0;
-
-    // チャンネル数 (DMは除く)
-    const channelResult = await env.DB.prepare(
-      "SELECT COUNT(*) as count FROM channels WHERE workspace_id = ? AND (type = 'channel' OR type IS NULL)"
-    ).bind(workspaceId).first<{ count: number }>();
-    defaultLimit.channelUsed = channelResult?.count || 0;
-
-  } catch (err) {
-    console.error("Failed to fetch resource usage count:", err);
-  }
-
-  // 2. SaaS制限フックが存在すれば、プラン情報を取得して上書き
+  // SaaS制限フックが存在すれば、プラン情報を取得して上書き
   if (env.SAAS_LIMITS?.getWorkspaceSubscriptionPlan) {
     try {
+      // 1. 使用状況をカウント
+      
+      // ストレージ使用量 (files テーブルの合計サイズ)
+      const storageResult = await env.DB.prepare(
+        "SELECT SUM(file_size) as total FROM files WHERE workspace_id = ?"
+      ).bind(workspaceId).first<{ total: number | null }>();
+      defaultLimit.storageUsed = storageResult?.total || 0;
+
+      // メンバー数
+      const memberResult = await env.DB.prepare(
+        "SELECT COUNT(*) as count FROM workspace_members WHERE workspace_id = ?"
+      ).bind(workspaceId).first<{ count: number }>();
+      defaultLimit.memberUsed = memberResult?.count || 0;
+
+      // チャンネル数 (DMは除く)
+      const channelResult = await env.DB.prepare(
+        "SELECT COUNT(*) as count FROM channels WHERE workspace_id = ? AND (type = 'channel' OR type IS NULL)"
+      ).bind(workspaceId).first<{ count: number }>();
+      defaultLimit.channelUsed = channelResult?.count || 0;
+
+      // 2. プラン情報を取得
       const saasPlan = await env.SAAS_LIMITS.getWorkspaceSubscriptionPlan(env, workspaceId);
       if (saasPlan) {
         return {
           ...defaultLimit,
           plan: saasPlan.plan,
+          planName: saasPlan.planName,
           storageLimit: saasPlan.storageLimit,
           memberLimit: saasPlan.memberLimit,
           channelLimit: saasPlan.channelLimit,

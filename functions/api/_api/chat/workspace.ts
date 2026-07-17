@@ -94,24 +94,8 @@ export async function handleCreateWorkspace(request: Request, env: Env): Promise
       batch.push(insertMember);
     }
 
-    if (env.SAAS_MODE === "true") {
-      const defaultPlanSetting = await env.DB.prepare(
-        "SELECT value FROM system_settings WHERE key = ?"
-      ).bind("default_saas_plan").first<{ value: string }>();
-      const defaultPlan = defaultPlanSetting?.value || "free";
-
-      const planDetail = await env.DB.prepare(
-        "SELECT storage_limit, member_limit, channel_limit FROM saas_plans WHERE id = ?"
-      ).bind(defaultPlan).first<{ storage_limit: number; member_limit: number; channel_limit: number }>();
-
-      const storageLimit = planDetail ? planDetail.storage_limit : 52428800; // 50MB
-      const memberLimit = planDetail ? planDetail.member_limit : 5;
-      const channelLimit = planDetail ? planDetail.channel_limit : 3;
-
-      const insertSubscription = env.DB.prepare(
-        "INSERT INTO workspace_subscriptions (workspace_id, plan, storage_limit, member_limit, channel_limit, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'active', datetime('now'), datetime('now'))"
-      ).bind(workspaceId, defaultPlan, storageLimit, memberLimit, channelLimit);
-      batch.push(insertSubscription);
+    if (env.SAAS_LIMITS?.onWorkspaceCreated) {
+      await env.SAAS_LIMITS.onWorkspaceCreated(env, workspaceId);
     }
 
     await env.DB.batch(batch);
