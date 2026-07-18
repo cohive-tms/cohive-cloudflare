@@ -135,6 +135,7 @@ CREATE TABLE IF NOT EXISTS items (
     is_private INTEGER DEFAULT 0 CHECK (is_private IN (0, 1)),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    assigned_group_id TEXT REFERENCES groups(id) ON DELETE SET NULL,
     FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
     FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE
 );

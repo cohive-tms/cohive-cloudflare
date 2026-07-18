@@ -90,7 +90,12 @@ export async function handleGetWorkspaceMembers(request: Request, env: Env, work
           SELECT json_group_array(group_id) 
           FROM group_members 
           WHERE user_id = u.id
-        ) as groupIdsJson
+        ) as groupIdsJson,
+        (
+          SELECT json_group_array(group_id)
+          FROM group_members
+          WHERE user_id = u.id AND is_leader = 1
+        ) as leaderGroupIdsJson
       FROM workspace_members wm
       JOIN users u ON wm.user_id = u.id
       WHERE wm.workspace_id = ?
@@ -98,8 +103,13 @@ export async function handleGetWorkspaceMembers(request: Request, env: Env, work
     `).bind(workspaceId).all<any>();
 
     const data = results.map(r => ({
-      ...r,
-      groupIds: r.groupIdsJson ? JSON.parse(r.groupIdsJson) : []
+      userId: r.userId,
+      email: r.email,
+      displayName: r.displayName,
+      avatarUrl: r.avatarUrl,
+      role: r.role,
+      groupIds: r.groupIdsJson ? JSON.parse(r.groupIdsJson) : [],
+      leaderGroupIds: r.leaderGroupIdsJson ? JSON.parse(r.leaderGroupIdsJson) : []
     }));
 
     return new Response(JSON.stringify({ success: true, data }), {
@@ -118,7 +128,7 @@ export async function handleGetWorkspaceMembers(request: Request, env: Env, work
 export async function handleAddWorkspaceMember(request: Request, env: Env, workspaceId: string): Promise<Response> {
   try {
     const body: any = await request.json();
-    const { email, role } = body;
+    const { email, role, groupId } = body;
 
     if (!email) {
       return new Response(JSON.stringify({ error: "Email is required" }), {
@@ -181,6 +191,24 @@ export async function handleAddWorkspaceMember(request: Request, env: Env, works
     await env.DB.prepare(
       "INSERT INTO workspace_members (workspace_id, user_id, role, created_at, updated_at) VALUES (?, ?, ?, datetime('now'), datetime('now'))"
     ).bind(workspaceId, userId, memberRole).run();
+
+    // 指定があればグループメンバーとしても登録
+    if (groupId) {
+      try {
+        const existingGroupMember = await env.DB.prepare(
+          "SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?"
+        ).bind(groupId, userId).first();
+
+        if (!existingGroupMember) {
+          const isLeaderVal = memberRole === 'group_admin' ? 1 : 0;
+          await env.DB.prepare(
+            "INSERT INTO group_members (group_id, user_id, is_leader, created_at) VALUES (?, ?, ?, datetime('now'))"
+          ).bind(groupId, userId, isLeaderVal).run();
+        }
+      } catch (groupErr) {
+        console.error("Failed to auto-assign group on invite:", groupErr);
+      }
+    }
 
     // 監査ログの記録
     logAudit(env, workspaceId, null, "member_add", { invitedEmail: email, role: memberRole }, request).catch(console.error);

@@ -11,7 +11,7 @@ export interface WorkspaceLimit {
   channelUsed: number;
   dmEnabled?: boolean;
   mediaEnabled?: boolean;
-  forbiddenExtensions?: string;
+  allowedExtensions?: string;
   stripeSubscriptionId?: string;
 }
 
@@ -29,7 +29,7 @@ export async function getWorkspaceSubscription(env: Env, workspaceId: string): P
     channelUsed: 0,
     dmEnabled: true,
     mediaEnabled: true,
-    forbiddenExtensions: "",
+    allowedExtensions: "",
   };
 
   // 無効なワークスペースIDの場合は初期値を返す
@@ -72,7 +72,7 @@ export async function getWorkspaceSubscription(env: Env, workspaceId: string): P
           channelLimit: saasPlan.channelLimit,
           dmEnabled: saasPlan.dmEnabled,
           mediaEnabled: saasPlan.mediaEnabled,
-          forbiddenExtensions: saasPlan.forbiddenExtensions,
+          allowedExtensions: saasPlan.allowedExtensions,
           stripeSubscriptionId: saasPlan.stripeSubscriptionId,
         };
       }
@@ -145,16 +145,16 @@ export async function checkWorkspaceLimit(
         message: `${planName}プランではファイルのアップロード（メディア機能）が禁止されています。`,
       };
     }
-    if (extra?.fileExtension && limits.forbiddenExtensions) {
-      const forbiddenList = limits.forbiddenExtensions.split(",")
+    if (extra?.fileExtension && limits.allowedExtensions) {
+      const allowedList = limits.allowedExtensions.split(",")
         .map(ext => ext.trim().toLowerCase())
         .filter(ext => ext.length > 0);
       
       const fileExt = extra.fileExtension.toLowerCase().replace(/^\./, "");
-      if (forbiddenList.includes(fileExt)) {
+      if (!allowedList.includes(fileExt)) {
         return {
           allowed: false,
-          message: `${planName}プランでは、拡張子「.${fileExt}」のファイルアップロードが禁止されています。`,
+          message: `${planName}プランでは、拡張子「.${fileExt}」のファイルアップロードは許可されていません。`,
         };
       }
     }

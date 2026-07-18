@@ -185,6 +185,7 @@ export async function handleGetItems(request: Request, env: Env, workspaceId: st
         i.is_all_day as isAllDay,
         i.is_private as isPrivate,
         i.created_at as createdAt,
+        i.assigned_group_id as assignedGroupId,
         uc.display_name as creatorName,
         w.name as workspaceName
       FROM items i
@@ -326,6 +327,7 @@ export async function handleGetItems(request: Request, env: Env, workspaceId: st
         endAt: row.endAt || null,
         isAllDay: row.isAllDay === 1,
         isPrivate: row.isPrivate === 1,
+        assignedGroupId: row.assignedGroupId || null,
         createdAt: row.createdAt,
       });
     }
@@ -354,7 +356,7 @@ export async function handleCreateItem(request: Request, env: Env, workspaceId: 
     }
 
     const body: any = await request.json();
-    const { title, description, assigneeIds, status, startAt, endAt, isAllDay, isPrivate, channelIds, priority, tags } = body;
+    const { title, description, assigneeIds, status, startAt, endAt, isAllDay, isPrivate, channelIds, priority, tags, assignedGroupId } = body;
 
     const member = await env.DB.prepare(
       "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
@@ -402,8 +404,8 @@ export async function handleCreateItem(request: Request, env: Env, workspaceId: 
     // 1. アイテム本体の保存
     const insertItem = env.DB.prepare(`
       INSERT INTO items (
-        id, workspace_id, creator_id, title, description, status, priority, tags, start_at, end_at, is_all_day, is_private, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, workspace_id, creator_id, title, description, status, priority, tags, start_at, end_at, is_all_day, is_private, assigned_group_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       itemId,
       workspaceId,
@@ -417,6 +419,7 @@ export async function handleCreateItem(request: Request, env: Env, workspaceId: 
       endAt || null,
       isAllDayInt,
       isPrivateInt,
+      assignedGroupId || null,
       createdAt,
       createdAt
     );
@@ -577,7 +580,7 @@ export async function handleUpdateItem(request: Request, env: Env, itemId: strin
     }
 
     const body: any = await request.json();
-    const { title, description, assigneeIds, status, startAt, endAt, isAllDay, isPrivate, channelIds, priority, tags } = body;
+    const { title, description, assigneeIds, status, startAt, endAt, isAllDay, isPrivate, channelIds, priority, tags, assignedGroupId } = body;
 
     if (userRole === 'guest' && Array.isArray(channelIds)) {
       if (channelIds.length === 0) {
@@ -617,6 +620,11 @@ export async function handleUpdateItem(request: Request, env: Env, itemId: strin
       isPrivateInt,
       updatedAt
     ];
+
+    if (assignedGroupId !== undefined) {
+      updateFields += ", assigned_group_id = ?";
+      params.push(assignedGroupId || null);
+    }
 
     if (itemPriority !== undefined) {
       updateFields += ", priority = ?";

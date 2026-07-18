@@ -94,18 +94,22 @@ export async function handleSearchWorkspace(
     const messageConditions = words.map(() => "(m.content LIKE ? OR u.display_name LIKE ? OR c.name LIKE ?)");
     const messageWhereClause = messageConditions.join(" AND ");
     
-    // バインドパラメータの構築 (workspaceId, userId, (word1, word1, word1), (word2, word2, word2)...)
-    const messageBindParams: any[] = [
-      workspaceId,
-      userId
-    ];
+    const isAll = workspaceId === "all";
+
+    // バインドパラメータの構築
+    const messageBindParams: any[] = [];
+    if (isAll) {
+      messageBindParams.push(userId, userId);
+    } else {
+      messageBindParams.push(workspaceId, userId);
+    }
     words.forEach(w => {
       const likeVal = `%${w}%`;
       messageBindParams.push(likeVal, likeVal, likeVal);
     });
 
     // メッセージ検索クエリの実行
-    const messageResults = await env.DB.prepare(`
+    const messageQuery = `
       SELECT 
         m.id,
         m.channel_id as channelId,
@@ -119,7 +123,7 @@ export async function handleSearchWorkspace(
       INNER JOIN channels c ON m.channel_id = c.id
       LEFT JOIN users u ON m.user_id = u.id
       LEFT JOIN message_pins pm ON m.id = pm.message_id
-      WHERE c.workspace_id = ?
+      WHERE ${isAll ? "c.workspace_id IN (SELECT workspace_id FROM workspace_members WHERE user_id = ?)" : "c.workspace_id = ?"}
         AND (
           c.is_private = 0 
           OR EXISTS (
@@ -129,26 +133,28 @@ export async function handleSearchWorkspace(
         AND (${messageWhereClause})
       ORDER BY m.created_at DESC
       LIMIT 100
-    `).bind(...messageBindParams).all<any>();
+    `;
+    const messageResults = await env.DB.prepare(messageQuery).bind(...messageBindParams).all<any>();
 
     // 2. LIKE 複合条件の構築 (ドキュメント)
     // 各キーワードが、タイトル(title)・本文(content)のいずれかに含まれる（AND）
     const documentConditions = words.map(() => "(fts.title LIKE ? OR fts.content LIKE ?)");
     const documentWhereClause = documentConditions.join(" AND ");
     
-    // バインドパラメータの構築 (workspaceId, workspaceId, userId, (word1, word1), (word2, word2)...)
-    const documentBindParams: any[] = [
-      workspaceId,
-      workspaceId,
-      userId
-    ];
+    // バインドパラメータの構築
+    const documentBindParams: any[] = [];
+    if (isAll) {
+      documentBindParams.push(userId, userId, userId);
+    } else {
+      documentBindParams.push(workspaceId, workspaceId, userId);
+    }
     words.forEach(w => {
       const likeVal = `%${w}%`;
       documentBindParams.push(likeVal, likeVal);
     });
 
     // ドキュメント検索クエリの実行
-    const documentResults = await env.DB.prepare(`
+    const documentQuery = `
       SELECT 
         fts.source_type as sourceType,
         fts.source_id as sourceId,
@@ -157,13 +163,13 @@ export async function handleSearchWorkspace(
       FROM documents_fts fts
       WHERE (
         -- ワークスペースドキュメント
-        (fts.source_type = 'workspace' AND fts.source_id = ?)
+        (fts.source_type = 'workspace' AND ${isAll ? "fts.source_id IN (SELECT workspace_id FROM workspace_members WHERE user_id = ?)" : "fts.source_id = ?"})
         OR
         -- チャンネルドキュメント
         (fts.source_type = 'channel' AND EXISTS (
           SELECT 1 FROM channels c
           WHERE c.id = fts.source_id
-            AND c.workspace_id = ?
+            AND ${isAll ? "c.workspace_id IN (SELECT workspace_id FROM workspace_members WHERE user_id = ?)" : "c.workspace_id = ?"}
             AND (
               c.is_private = 0
               OR EXISTS (
@@ -174,7 +180,8 @@ export async function handleSearchWorkspace(
       )
       AND (${documentWhereClause})
       LIMIT 50
-    `).bind(...documentBindParams).all<any>();
+    `;
+    const documentResults = await env.DB.prepare(documentQuery).bind(...documentBindParams).all<any>();
 
     return new Response(JSON.stringify({
       success: true,

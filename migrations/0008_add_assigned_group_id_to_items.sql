@@ -1,0 +1,1 @@
+ALTER TABLE items ADD COLUMN assigned_group_id TEXT REFERENCES groups(id) ON DELETE SET NULL;

@@ -249,6 +249,7 @@ async function createMessageNotifications(
         targetUserIds.add(m.userId);
       });
     } else {
+      // 1. 個別メンションチェック
       wsMembers.forEach(m => {
         const name = m.displayName || m.email.split('@')[0];
         console.log(`[Mention Debug] Checking member: ${name} (userId: ${m.userId}) against content: "${content}"`);
@@ -257,6 +258,33 @@ async function createMessageNotifications(
           console.log(`[Mention Debug] Match found for: ${name}`);
         }
       });
+
+      // 2. グループメンションチェック
+      try {
+        const { results: wsGroups } = await env.DB.prepare(
+          "SELECT id, name FROM groups WHERE workspace_id = ?"
+        ).bind(channel.workspaceId).all<{ id: string; name: string }>();
+
+        if (wsGroups && wsGroups.length > 0) {
+          for (const group of wsGroups) {
+            if (content.includes(`@${group.name}`) || plainContent.includes(`@${group.name}`)) {
+              console.log(`[Group Mention Debug] Match found for group: ${group.name} (id: ${group.id})`);
+              
+              const { results: groupMembers } = await env.DB.prepare(
+                "SELECT user_id as userId FROM group_members WHERE group_id = ?"
+              ).bind(group.id).all<{ userId: string }>();
+              
+              if (groupMembers && groupMembers.length > 0) {
+                groupMembers.forEach(gm => {
+                  targetUserIds.add(gm.userId);
+                });
+              }
+            }
+          }
+        }
+      } catch (groupErr) {
+        console.error("Failed to process group mentions:", groupErr);
+      }
     }
 
     const batch = Array.from(targetUserIds).map(userId => {
