@@ -425,17 +425,18 @@ export async function handleDirectDownload(request: Request, env: Env): Promise<
     }
 
     const responseHeaders = new Headers();
-    object.writeHttpMetadata(responseHeaders);
-    responseHeaders.set("etag", object.httpEtag);
+    if (object.httpEtag) {
+      responseHeaders.set("etag", object.httpEtag);
+    }
     responseHeaders.set("Access-Control-Allow-Origin", "*");
+
+    const contentType = (fileInfo && fileInfo.contentType) || object.httpMetadata?.contentType || "application/octet-stream";
+    responseHeaders.set("Content-Type", contentType);
 
     const dispositionMode = url.searchParams.get("disposition") === "inline" ? "inline" : "attachment";
     if (fileInfo && fileInfo.fileName) {
       const encodedFileName = encodeURIComponent(fileInfo.fileName);
       responseHeaders.set("Content-Disposition", `${dispositionMode}; filename="${encodedFileName}"; filename*=UTF-8''${encodedFileName}`);
-    }
-    if (fileInfo && fileInfo.contentType && (!responseHeaders.has("Content-Type") || responseHeaders.get("Content-Type") === "application/octet-stream")) {
-      responseHeaders.set("Content-Type", fileInfo.contentType);
     }
 
     return new Response(object.body, {

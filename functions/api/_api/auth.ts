@@ -157,6 +157,7 @@ export async function handleLogin(request: Request, env: Env): Promise<Response>
         id: userResult.id,
         displayName: userResult.display_name,
         email: userResult.email,
+        avatarUrl: (userResult as any).avatar_url || null,
         workspaceId,
         defaultChannelId,
         token: accessToken,
@@ -305,11 +306,12 @@ export async function handleRefresh(request: Request, env: Env): Promise<Respons
 
     // ユーザー情報とデフォルトのワークスペース・チャンネルを再取得
     const userResult = await env.DB.prepare(
-      "SELECT id, email, display_name, language FROM users WHERE id = ?"
+      "SELECT id, email, display_name, avatar_url as avatarUrl, language FROM users WHERE id = ?"
     ).bind(userId).first<{
       id: string;
       email: string;
       display_name: string;
+      avatarUrl?: string | null;
       language?: string;
     }>();
 
@@ -361,6 +363,7 @@ export async function handleRefresh(request: Request, env: Env): Promise<Respons
         id: userResult.id,
         displayName: userResult.display_name,
         email: userResult.email,
+        avatarUrl: userResult.avatarUrl || null,
         workspaceId,
         defaultChannelId,
         token: accessToken,
@@ -528,6 +531,7 @@ export async function handleVerifyMfa(request: Request, env: Env): Promise<Respo
         id: userResult.id,
         displayName: userResult.display_name,
         email: userResult.email,
+        avatarUrl: (userResult as any).avatar_url || null,
         workspaceId,
         defaultChannelId,
         token: accessToken,
