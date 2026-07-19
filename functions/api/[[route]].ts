@@ -9,6 +9,7 @@ import {
   handleGetMediaLibrary,
   handleDeleteFile
 } from "./_api/files";
+import { handleUploadAvatar, handleGetAvatar } from "./_api/avatars";
 import { handleLogin, handleChangePassword, handleRefresh, handleLogout, handleVerifyMfa, handleRegister } from "./_api/auth";
 import {
   handleGetItems,
@@ -736,6 +737,13 @@ async function handleApiRequests(context: EventContext<Env, any, any>, origin: s
     }
 
     // 3. R2 ファイル添付関連 API (Workers プロキシ直接アップロード)
+    if (url.pathname === "/api/avatars/upload" && method === "POST") {
+      return await handleUploadAvatar(request, env);
+    }
+    if (url.pathname.startsWith("/api/avatars/") && method === "GET") {
+      const filename = url.pathname.replace("/api/avatars/", "");
+      return await handleGetAvatar(request, env, filename);
+    }
     if (url.pathname === "/api/files/upload" && method === "POST") {
       return await handleDirectUpload(request, env);
     }
