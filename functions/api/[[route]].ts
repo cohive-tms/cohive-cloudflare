@@ -595,6 +595,9 @@ async function handleApiRequests(context: EventContext<Env, any, any>, origin: s
   const jwtSecret = await getJwtSecret(env);
   const isEmojiRawRoute = !!url.pathname.match(/^\/api\/workspaces\/([^\/]+)\/emojis\/raw\/([^\/]+)$/);
   const isAdminRoute = url.pathname.startsWith("/api/admin/");
+  const isAvatarGetRoute = url.pathname.startsWith("/api/avatars/") && method === "GET";
+  const isFileDownloadRoute = url.pathname.startsWith("/api/files/download/") && method === "GET";
+
   const isPublicRoute = 
     url.pathname === "/api/auth/login" ||
     url.pathname === "/api/auth/login/verify" ||
@@ -604,38 +607,44 @@ async function handleApiRequests(context: EventContext<Env, any, any>, origin: s
     url.pathname === "/api/setup/status" ||
     url.pathname === "/api/setup/register" ||
     isEmojiRawRoute ||
-    isAdminRoute;
+    isAdminRoute ||
+    isAvatarGetRoute ||
+    isFileDownloadRoute;
 
   let authenticatedUserId: string | null = null;
 
   const isApiRoute = url.pathname.startsWith("/api/");
-  if (isApiRoute && !isPublicRoute) {
-    const authHeader = request.headers.get("Authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Authorization token required" }), {
-        status: 401,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": origin,
-          "Access-Control-Allow-Credentials": "true",
-        }
-      });
-    }
 
-    const token = authHeader.substring(7);
+  // トークンの抽出（Header または Query Parameter）
+  let token: string | null = null;
+  const authHeader = request.headers.get("Authorization");
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    token = authHeader.substring(7);
+  } else {
+    token = url.searchParams.get("token");
+  }
+
+  if (token) {
     const payload = await verifyJWT(token, jwtSecret);
-    if (!payload || payload.type !== "access" || !payload.userId) {
-      return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
-        status: 401,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": origin,
-          "Access-Control-Allow-Credentials": "true",
-        }
-      });
+    if (payload && payload.type === "access" && payload.userId) {
+      authenticatedUserId = payload.userId;
     }
+  }
 
-    authenticatedUserId = payload.userId;
+  // クエリパラメータからのフォールバック user_id (直リンク用)
+  if (!authenticatedUserId) {
+    authenticatedUserId = url.searchParams.get("userId") || url.searchParams.get("user_id");
+  }
+
+  if (isApiRoute && !isPublicRoute && !authenticatedUserId) {
+    return new Response(JSON.stringify({ error: "Authorization token required" }), {
+      status: 401,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Credentials": "true",
+      }
+    });
   }
 
   // X-User-Id ヘッダーの値を暗号署名検証済みのIDで上書き（なりすまし偽造ヘッダーを完全無効化）

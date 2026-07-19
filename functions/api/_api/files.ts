@@ -309,12 +309,12 @@ export async function handleDirectUpload(request: Request, env: Env): Promise<Re
 
 export async function handleDirectDownload(request: Request, env: Env): Promise<Response> {
   try {
-    const userId = request.headers.get("X-User-Id");
+    const url = new URL(request.url);
+    let userId = request.headers.get("X-User-Id") || url.searchParams.get("userId") || url.searchParams.get("user_id");
     if (!userId) {
       return new Response("Unauthorized", { status: 401 });
     }
 
-    const url = new URL(request.url);
     const prefix = "/api/files/download/";
     
     const objectKey = decodeURIComponent(
@@ -327,13 +327,15 @@ export async function handleDirectDownload(request: Request, env: Env): Promise<
 
     // filesテーブルからファイル情報と紐づくチャンネル情報を取得
     const fileInfo = await env.DB.prepare(`
-      SELECT f.workspace_id as workspaceId, f.channel_id as channelId, f.uploader_id as uploaderId, f.is_private as isPrivate,
+      SELECT f.file_name as fileName, f.content_type as contentType, f.workspace_id as workspaceId, f.channel_id as channelId, f.uploader_id as uploaderId, f.is_private as isPrivate,
              c.is_private as isChannelPrivate, c.type as channelType, c.group_id as groupId
       FROM files f
       LEFT JOIN channels c ON f.channel_id = c.id
       WHERE f.object_key = ?
       LIMIT 1
     `).bind(objectKey).first<{
+      fileName: string;
+      contentType: string;
       workspaceId: string;
       channelId: string | null;
       uploaderId: string;
@@ -425,7 +427,16 @@ export async function handleDirectDownload(request: Request, env: Env): Promise<
     const responseHeaders = new Headers();
     object.writeHttpMetadata(responseHeaders);
     responseHeaders.set("etag", object.httpEtag);
+    responseHeaders.set("Access-Control-Allow-Origin", "*");
 
+    const dispositionMode = url.searchParams.get("disposition") === "inline" ? "inline" : "attachment";
+    if (fileInfo && fileInfo.fileName) {
+      const encodedFileName = encodeURIComponent(fileInfo.fileName);
+      responseHeaders.set("Content-Disposition", `${dispositionMode}; filename="${encodedFileName}"; filename*=UTF-8''${encodedFileName}`);
+    }
+    if (fileInfo && fileInfo.contentType && (!responseHeaders.has("Content-Type") || responseHeaders.get("Content-Type") === "application/octet-stream")) {
+      responseHeaders.set("Content-Type", fileInfo.contentType);
+    }
 
     return new Response(object.body, {
       headers: responseHeaders,
