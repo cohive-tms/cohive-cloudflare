@@ -2,7 +2,11 @@
 
 A zero-cost, fully self-hosted, and ultra-lightweight business collaboration platform.
 
+> 🇯🇵 **[日本語版 README はこちら (Japanese Documentation)](./README.ja.md)**
+
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cohive-tms/cohive-cloudflare)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Try_Now-brightgreen?style=flat-square&logo=cloudflare)](https://demo.cohive.dev)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 ---
 
@@ -11,6 +15,10 @@ A zero-cost, fully self-hosted, and ultra-lightweight business collaboration pla
 **cohive** is an ultra-lightweight, fully independent (self-hosted) business communication and collaboration application designed to break you free from vendor lock-in, soaring monthly fees, and data limits of proprietary platforms.
 
 By leveraging Cloudflare’s powerful serverless ecosystem (Pages, Workers, D1, R2), you can deploy a secure, private collaboration environment to your own infrastructure with a single click.
+
+* 🚀 **[Try Live Demo](https://demo.cohive.dev)** (Explore without installation)
+* 🔒 **[Privacy Policy](./PRIVACY.md)** (Zero data tracking / selling guaranteed)
+* 📄 **[Terms of Service](./TERMS.md)**
 
 ---
 
@@ -90,127 +98,35 @@ Add an extra layer of protection by placing Cloudflare Access in front of your d
 
 ---
 
-# 💬 cohive (日本語)
+## 💻 Local Development Guide
 
-「維持費0円から始められる、完全独立（セルフホスト）型の超軽量ビジネスコラボレーションプラットフォーム」
+Steps for local development and testing:
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cohive-tms/cohive-cloudflare)
-
----
-
-## 🌟 プロジェクト概要
-
-**cohive** は、SlackやTeamsといった既存チャットツールのベンダーロックイン（高額な月額費用、メッセージ保存制限、データ管理権の喪失）からあなたを解放するために開発された、**完全独立（セルフホスト）型**の超軽量コラボレーションアプリです。
-
-Cloudflareの強力なサーバーレスエコシステム（Pages, Workers, D1, R2）をフル活用することで、**ボタン1つであなた専用のセキュアな環境を構築**できます。
-
----
-
-## 🚀 主な機能・特徴
-
-| 特徴 | 詳細説明 |
-| :--- | :--- |
-| 🛡️ **完全マルチテナント** | 各組織（会社）ごとに個別の**D1データベース**を自動割り当て。物理的にデータが分離され、最高水準のセキュリティを担保します。 |
-| 🍃 **超・省エネポーリング** | 常時接続が必要なWebSocketを使用せず、非アクティブ時に**通信頻度を自動的に減速・停止**するインテリジェント設計でサーバー負荷を極限まで抑えます。 |
-| ⚡ **楽観的UI (Optimistic UI)** | サーバー応答を待たずにメッセージを即時描画。ネットワーク遅延を感じさせない、サクサクとした書き込み体験を提供します。 |
-| 📅 **タスク＆カレンダー統合** | カレンダーの予定と密接に連携した、カンバン形式のタスク管理機能を内蔵。チームのスケジュールを一元管理できます。 |
-| 📝 **ドキュメント共同編集** | ワークスペース全体、またはチャンネルごとにリアルタイムで共同編集・共有可能なマークダウンドキュメント機能。 |
-| 📁 **閲覧制限付きメディアライブラリ** | チャットの閲覧権限（パブリック/プライベート/DM）と同期したアクセス制御を持つ、安全なメディアストレージと管理画面。 |
-| 💰 **維持費0円 (Free Tier運用)** | すべての機能がCloudflareの**無料枠（Free Tier）**内で動作するよう最適化。小中規模チームなら完全0円で運用可能です。 |
-
----
-
-## 🛠️ デプロイ方法（ステップ・バイ・ステップ）
-
-### 📋 事前準備（必要なもの）
-デプロイを開始する前に、以下を用意してください：
-* **Cloudflare アカウント**（無料プランで完全に動作します）
-* **GitHub アカウント**（Cloudflare Pages との連携・コードコピーに必要です）
-
----
-
-### 1. デプロイボタンをクリックする
-以下の「Deploy to Cloudflare Pages」ボタンをクリックします。
-
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cohive-tms/cohive-cloudflare)
-
-### 2. 画面の指示に従いデプロイを完了する
-1. Cloudflare アカウントへログイン（または新規登録）し、GitHub アカウントとの連携を承認します。
-2. 承認後、Cloudflare Pages が**このリポジトリをあなたの GitHub アカウントへ自動的にフォーク（コピー）**します。
-3. ビルド設定やデータベースなどの連携は、設定ファイル（`wrangler.toml`）を元に**すべて自動で入力・作成される**ため、そのまま「Connect」や「Deploy」を進めてデプロイを完了させます。
-
-### 3. 生成された URL にアクセスして運用開始！
-デプロイ完了後、提供される `https://xxx.pages.dev` という専用の公開 URL にアクセスします。
-デプロイ後、公開 URL に初めてアクセスした瞬間に、**データベースが自動で初期化（テーブルが作成）**され、管理者アカウントの初期設定画面が表示されます。
-
-### 4. 推奨：メール送信設定（SMTP）の有効化
-初期デプロイ直後は、メール機能は**オプション（任意）**となっています。メール設定を行わない場合、以下の運用になります：
-* 最管理者のパスワード紛失時の復旧は、初期登録時に発行される**「リカバリーコード」**で行います。
-* 一般メンバーのパスワード紛失時は、管理者が管理画面から**「一時パスワードを発行」**して手動で本人に伝えます。
-
-自動での招待メール配信、オフライン時のメンション通知、2段階認証などのフル機能を利用したい場合は、管理者アカウントでログインし、**「ワークスペース管理」 > 「メール送信設定」** から、お使いのSMTPサーバー情報（Gmailのアプリパスワードや、レンタルサーバーのSMTPアカウント情報など）を設定してください。
-
----
-
-## 💡 デプロイすると Cloudflare 上で何が起こるの？（作成されるリソース）
-
-ワンクリックデプロイを実行すると、Cloudflare 側で以下のリソースが自動的に作成・設定されます。何が起こっているか不安な方は参考にしてください：
-
-1. **Pages プロジェクトの作成**:
-   * アプリケーションのフロントエンド（静的ファイル）およびバックエンド API（Functions）をホストするための場所が作成されます。
-2. **D1 データベース（SQL データベース）の作成**:
-   * アカウント内に `cohive_db` という名前の軽量 SQL データベースが自動で作成されます。
-3. **R2 バケット（オブジェクトストレージ）の作成**:
-   * アカウント内に `cohive-storage` という名前のメディアファイル（画像や添付ファイル）保存用ストレージが自動で作成されます。
-4. **リソースの接続（バインディング）**:
-   * 作成された D1 データベースと R2 バケットが、Pages プロジェクトの「関数設定」に自動的に紐付けられ、プログラムからアクセスできるようになります。
-5. **テーブルの自動作成（初回アクセス時）**:
-   * デプロイ後、公開 URL に初めてアクセスした瞬間に、プログラムが D1 内にユーザーテーブルやメッセージテーブルなどの必要な構造（テーブルやインデックス）を自動的に作成します（手動の SQL 実行は不要です）。
-
----
-
-## 🔒 セキュリティ向上のための推奨設定 (Cloudflare)
-
-本番運用を開始するにあたり、より強固なセキュリティを確保するため、Cloudflare ダッシュボードから以下の設定を行うことを強く推奨します。
-
-### 1. WAF (Web Application Firewall) によるアクセス制限
-悪意のあるボットや海外からのアタックをネットワークレベルで遮断します。
-* **国別制限 (ジオブロック)**: 利用するメンバーが国内に限られる場合、日本国外からのアクセスをすべてブロックします。
-  - *カスタムルール式の例*: `(ip.geoip.country ne "JP")` -> アクション: *ブロック*
-* **IPアドレス制限**: 固定IP環境がある場合、特定のIPからのみアクセスを許可します。
-
-### 2. Cloudflare Zero Trust (Access) による二重防御
-ログイン画面の手前に Cloudflare Access を配置し、認証されたユーザーしかアプリにアクセスできないようにします。
-* Cloudflare ダッシュボードの **Zero Trust** > **Access** > **Applications** に進みます。
-* デプロイした cohive のドメイン宛のアプリケーションを作成します。
-* 特定のメールアドレスやドメイン（例: `@yourcompany.com`）のユーザーに対して、ワンタイムPINや外部IDプロバイダ認証を要求するポリシーを設定します。これにより、ネットワークレベルで関係者以外のアクセスを完全に排除できます。
-
----
-
-## 💻 ローカル開発方法
-
-ローカルで動作確認および開発を行うための手順です。
-
-### 1. 依存関係のインストール
-プロジェクトのルートディレクトリで必要な依存関係をインストールします。
-
+### 1. Install Dependencies
 ```bash
 npm install
 ```
 
+### 2. Run Local Servers
+Start both Vite frontend server and Pages Functions API server:
 
-### 2. ローカル開発サーバーの起動
-Vite 開発サーバーと Cloudflare Pages Functions (Wrangler) の両方を起動します。
-
-**ターミナル 1 (Pages Functions API サーバーの起動):**
+**Terminal 1 (API Server):**
 ```bash
 npm run pages:dev
 ```
 
-**ターミナル 2 (フロントエンド Vite サーバーの起動):**
+**Terminal 2 (Frontend Dev Server):**
 ```bash
 npm run dev
 ```
 
-起動後、ブラウザで [http://localhost:3000](http://localhost:3000) にアクセスします。
-（フロントエンドの API リクエストは `vite.config.ts` のプロキシ設定により `localhost:8788` の Pages Functions API へ自動で転送されます）
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+## 📄 License & Policies
+
+* **License**: [MIT License](./LICENSE)
+* **Privacy Policy**: [PRIVACY.md](./PRIVACY.md)
+* **Terms of Service**: [TERMS.md](./TERMS.md)
+* **Security Policy**: [SECURITY.md](./SECURITY.md)

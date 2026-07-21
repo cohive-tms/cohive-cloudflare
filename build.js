@@ -29,7 +29,7 @@ if (!existsSync(frontendPackageJson)) {
     }
 
     // 直接クローンを実行 (高速化のため --depth 1 を指定)
-    spawnSync('git', ['clone', '--depth', '1', 'https://github.com/cospace-tms/cospace-frontend.git', 'frontend'], {
+    spawnSync('git', ['clone', '--depth', '1', 'https://github.com/cohive-tms/cohive-frontend.git', 'frontend'], {
       stdio: 'inherit',
       shell: true
     });
