@@ -81,7 +81,6 @@ export async function handleGetPresignedUploadUrl(request: Request, env: Env): P
     }
 
     const fileId = crypto.randomUUID();
-    const ext = fileName.includes(".") ? `.${fileName.split(".").pop()}` : "";
     const objectKey = `uploads/${fileId}${ext}`;
 
     const s3Client = getS3Client(env);

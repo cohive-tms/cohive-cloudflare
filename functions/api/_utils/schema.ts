@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
     display_name TEXT,
     avatar_url TEXT,
     language TEXT DEFAULT 'ja',
+    status TEXT DEFAULT 'active',
     last_active_at DATETIME,
     tokens_valid_after DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

@@ -13,6 +13,9 @@ export interface WorkspaceLimit {
   mediaEnabled?: boolean;
   allowedExtensions?: string;
   maxFileSizeMb?: number;
+  forbiddenExtensions?: string;
+  msgRetentionDays?: number;
+  msgRetentionCount?: number;
   stripeSubscriptionId?: string;
 }
 
@@ -34,6 +37,7 @@ export async function getWorkspaceSubscription(env: Env, workspaceId: string): P
     mediaEnabled: true,
     allowedExtensions: "",
     maxFileSizeMb: 100,
+    forbiddenExtensions: DANGEROUS_EXTENSIONS.join(", "),
   };
 
   // 無効なワークスペースIDの場合は初期値を返す
@@ -78,6 +82,9 @@ export async function getWorkspaceSubscription(env: Env, workspaceId: string): P
           mediaEnabled: saasPlan.mediaEnabled,
           allowedExtensions: saasPlan.allowedExtensions,
           maxFileSizeMb: saasPlan.maxFileSizeMb || 100,
+          msgRetentionDays: saasPlan.msgRetentionDays,
+          msgRetentionCount: saasPlan.msgRetentionCount,
+          forbiddenExtensions: DANGEROUS_EXTENSIONS.join(", "),
           stripeSubscriptionId: saasPlan.stripeSubscriptionId,
         };
       }

@@ -36,11 +36,19 @@ export async function handleLogin(request: Request, env: Env): Promise<Response>
       password_hash: string;
       display_name: string;
       language?: string;
+      status?: string;
     }>();
 
     if (!userResult) {
       return new Response(JSON.stringify({ error: "Invalid email or password" }), {
         status: 401,
+        headers,
+      });
+    }
+
+    if (userResult.status === 'suspended') {
+      return new Response(JSON.stringify({ error: "このアカウントは一時停止（BAN）されています。システム管理者にお問い合わせください。" }), {
+        status: 403,
         headers,
       });
     }

@@ -157,6 +157,15 @@ async function runMigrations(env: Env) {
     }
   }
 
+  try {
+    await env.DB.prepare("SELECT status FROM users LIMIT 1").all();
+  } catch (colErr: any) {
+    if (colErr.message && (colErr.message.includes("no such column") || colErr.message.includes("has no column"))) {
+      console.log("Database Migration: Adding status column to users table...");
+      await env.DB.prepare("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'").run();
+    }
+  }
+
   // items テーブルへの assigned_group_id カラム自動追加
   try {
     await env.DB.prepare("SELECT assigned_group_id FROM items LIMIT 1").all();
@@ -695,13 +704,17 @@ async function handleApiRequests(context: EventContext<Env, any, any>, origin: s
       let isValidToken = true;
       try {
         const userRevoke = await env.DB.prepare(
-          "SELECT tokens_valid_after FROM users WHERE id = ?"
-        ).bind(payload.userId).first<{ tokens_valid_after: string | null }>();
+          "SELECT tokens_valid_after, status FROM users WHERE id = ?"
+        ).bind(payload.userId).first<{ tokens_valid_after: string | null; status: string | null }>();
 
-        if (userRevoke && userRevoke.tokens_valid_after) {
-          const validAfterSec = Math.floor(new Date(userRevoke.tokens_valid_after).getTime() / 1000);
-          if (payload.iat && payload.iat < validAfterSec) {
+        if (userRevoke) {
+          if (userRevoke.status === 'suspended') {
             isValidToken = false;
+          } else if (userRevoke.tokens_valid_after) {
+            const validAfterSec = Math.floor(new Date(userRevoke.tokens_valid_after).getTime() / 1000);
+            if (payload.iat && payload.iat < validAfterSec) {
+              isValidToken = false;
+            }
           }
         }
       } catch (e) {

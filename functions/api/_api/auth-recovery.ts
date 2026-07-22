@@ -222,6 +222,15 @@ export async function handleResetMemberPassword(
 
     const { workspaceId, userId } = params;
 
+    // SaaS環境でのワークスペースオーナーによる他メンバーパスワードリセット制限
+    const isSaas = (env as any).SAAS_MODE === "true" || (env as any).IS_SAAS_MODE === "true" || request.headers.get("X-Saas-Mode") === "true";
+    if (isSaas) {
+      return new Response(JSON.stringify({ error: "SaaS環境ではワークスペース管理からの他メンバーのパスワードリセットは無効化されています。" }), {
+        status: 403,
+        headers,
+      });
+    }
+
     // 操作者がワークスペースのオーナーかどうかチェック
     const isOwner = await checkIsOwner(env, operatorId, workspaceId);
     if (!isOwner) {
