@@ -3,6 +3,7 @@ import { Env } from "../[[route]]";
 export interface WorkspaceLimit {
   plan: string;
   planName?: string;
+  status?: string;
   storageLimit: number;
   storageUsed: number;
   memberLimit: number;
@@ -27,6 +28,7 @@ const DANGEROUS_EXTENSIONS = ["exe", "bat", "cmd", "sh", "php", "cgi", "pl", "as
 export async function getWorkspaceSubscription(env: Env, workspaceId: string): Promise<WorkspaceLimit> {
   const defaultLimit: WorkspaceLimit = {
     plan: "unlimited",
+    status: "active",
     storageLimit: Infinity,
     storageUsed: 0,
     memberLimit: Infinity,
@@ -75,6 +77,7 @@ export async function getWorkspaceSubscription(env: Env, workspaceId: string): P
           ...defaultLimit,
           plan: saasPlan.plan,
           planName: saasPlan.planName,
+          status: saasPlan.status || 'active',
           storageLimit: saasPlan.storageLimit,
           memberLimit: saasPlan.memberLimit,
           channelLimit: saasPlan.channelLimit,

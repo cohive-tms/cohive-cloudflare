@@ -773,6 +773,36 @@ async function handleApiRequests(context: EventContext<Env, any, any>, origin: s
     return setupError;
   }
 
+  // ワークスペース一時停止（suspended）アクセス制限チェック
+  const targetWorkspaceId = request.headers.get("X-Workspace-Id") || 
+    url.searchParams.get("workspaceId") || 
+    url.pathname.match(/^\/api\/workspaces\/([^\/]+)/)?.[1];
+
+  const isExemptRoute = 
+    url.pathname.startsWith("/api/admin/") ||
+    url.pathname.startsWith("/api/auth/") ||
+    url.pathname.startsWith("/api/setup/") ||
+    url.pathname === "/api/workspaces" ||
+    url.pathname.endsWith("/subscription");
+
+  if (targetWorkspaceId && !isExemptRoute) {
+    try {
+      const sub = await getWorkspaceSubscription(env, targetWorkspaceId);
+      if (sub && sub.status === 'suspended') {
+        return new Response(JSON.stringify({ error: "Workspace is suspended by administrator." }), {
+          status: 403,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+          }
+        });
+      }
+    } catch (e) {
+      console.error("Failed to check workspace suspended status:", e);
+    }
+  }
+
   try {
     // 1. 初期セットアップ関連 API / 認証 API / ユーザープロフィール API
     if (url.pathname === "/api/setup/status" && method === "GET") {
@@ -886,13 +916,16 @@ async function handleApiRequests(context: EventContext<Env, any, any>, origin: s
           stripePublishableKey = stripeSettings?.publishableKey || "";
         } catch {}
 
+        const subscriptionPayload = {
+          ...data,
+          stripeEnabled,
+          stripePublishableKey
+        };
+
         return new Response(JSON.stringify({ 
           success: true, 
-          data: {
-            ...data,
-            stripeEnabled,
-            stripePublishableKey
-          } 
+          data: subscriptionPayload,
+          subscription: subscriptionPayload
         }), {
           status: 200,
           headers: {

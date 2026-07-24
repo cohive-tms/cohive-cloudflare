@@ -185,6 +185,25 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
+## ⚠️ Disclaimer & Important Notes
+
+### 🧪 1. Beta Status (Public Preview)
+* **CoHive** is currently provided as a **Beta / Public Preview** release.
+* Unintended bugs, breaking changes, or database schema updates may occur in future versions. Regular backups are recommended for critical data.
+
+### 🛡️ 2. Disclaimer of Warranty & Liability
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, DATA LOSS, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+### 💬 3. Support & Feedback Policy
+* CoHive is an open-source project created by an individual developer. Dedicated 24/7 technical support or guaranteed SLA is not provided.
+* Please report bugs and feature requests via [GitHub Issues](https://github.com/cohive-tms/cohive-cloudflare/issues) (handled on a best-effort basis).
+
+### 💼 4. Sponsor Edition (SaaS / Multi-Workspace Edition)
+* The private repository provided to sponsors serves as a token of gratitude for supporting ongoing development. It does not constitute a commercial product warranty or Enterprise SLA.
+
+---
+
 ## 📄 License & Policies
 
 * **License**: [MIT License](./LICENSE)

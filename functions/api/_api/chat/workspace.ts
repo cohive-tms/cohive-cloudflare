@@ -1,5 +1,6 @@
 import type { Env } from "../../[[route]]";
 import { logAudit } from "../../_utils/audit";
+import { getWorkspaceSubscription } from "../../_utils/saas";
 
 const headers = {
   "Content-Type": "application/json",
@@ -16,9 +17,11 @@ export async function handleGetWorkspaces(request: Request, env: Env): Promise<R
     let query = `
       SELECT 
         w.*,
+        COALESCE(sub.status, 'active') as status,
         COALESCE(n.unread_count, 0) as unreadCount
       FROM workspaces w
       INNER JOIN workspace_members wm ON w.id = wm.workspace_id
+      LEFT JOIN workspace_subscriptions sub ON w.id = sub.workspace_id
       LEFT JOIN (
         SELECT workspace_id, COUNT(*) as unread_count 
         FROM notifications 
@@ -33,7 +36,14 @@ export async function handleGetWorkspaces(request: Request, env: Env): Promise<R
       .bind(userId || "", userId || "")
       .all();
 
-    return new Response(JSON.stringify({ success: true, data: results }), {
+    const filteredResults = (results || []).filter((w: any) => {
+      if (env.SAAS_MODE === "true" && w.status === "suspended") {
+        return false;
+      }
+      return true;
+    });
+
+    return new Response(JSON.stringify({ success: true, data: filteredResults }), {
       status: 200,
       headers,
     });
@@ -62,14 +72,22 @@ export async function handleCreateWorkspace(request: Request, env: Env): Promise
     const userId = request.headers.get("X-User-Id");
 
     if (env.SAAS_MODE === "true" && userId) {
-      const ownedWS = await env.DB.prepare(
-        "SELECT COUNT(*) as count FROM workspace_members WHERE user_id = ? AND role = 'owner'"
-      ).bind(userId).first<{ count: number }>();
-      
-      const count = ownedWS?.count ?? 0;
-      if (count >= 3) {
+      const ownedWSResult = await env.DB.prepare(
+        "SELECT workspace_id FROM workspace_members WHERE user_id = ? AND role = 'owner'"
+      ).bind(userId).all<{ workspace_id: string }>();
+
+      const ownedWSList = ownedWSResult?.results || [];
+      let freeCount = 0;
+      for (const ws of ownedWSList) {
+        const sub = await getWorkspaceSubscription(env, ws.workspace_id);
+        if (!sub.plan || sub.plan === 'free' || sub.plan === 'default') {
+          freeCount++;
+        }
+      }
+
+      if (freeCount >= 3) {
         return new Response(JSON.stringify({ 
-          error: "無料プランの制限に達しました。作成可能なワークスペースは最大3つまでです。将来の有料プランで制限が解除されます。" 
+          error: "自身が所有する初期(Free)ワークスペースが上限(3/3)に達しています。新しく作成するには、既存のワークスペースを上位プランへ変更申請するか、不要な無料ワークスペースを削除してください。" 
         }), {
           status: 403,
           headers,
