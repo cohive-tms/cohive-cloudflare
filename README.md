@@ -63,7 +63,21 @@ flowchart TD
 
 ---
 
-### 🔑 STEP 2: Configure ENCRYPTION_SECRET (Physical Key Separation)
+### 👑 STEP 2: Initial Admin Setup via `/admin`
+
+Immediately after deployment, no platform Super Admin account exists. Accessing the main domain (`/`) will display a **"System Preparing"** screen until initial configuration is complete.
+
+1. **Access Admin Portal (`/admin`)**  
+   Append `/admin` to your generated domain URL in the browser.  
+   *(e.g., `https://xxx.pages.dev/admin` or `https://yourdomain.com/admin`)*
+2. **Register First Super Admin**  
+   You will be greeted by the **"CoHive Enterprise Setup"** screen. Enter your Display Name, Email, and Initial Password, then click **"Register First Admin"**.
+3. **Complete Platform Initialization**  
+   Upon successful registration, the admin console will load, completing platform initialization and unlocking general user access for workspaces and chat functions.
+
+---
+
+### 🔑 STEP 3: Configure ENCRYPTION_SECRET (Physical Key Separation)
 
 To **completely eliminate the risk of decrypted credentials in the event of a full D1 database leak**, storing your encryption key in Cloudflare Workers environment variables (Secrets) is strongly recommended.
 

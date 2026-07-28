@@ -718,7 +718,8 @@ export default {
     // 2. SPA/静的ファイルのリクエスト処理 (SPAルーティングフォールバック)
     if (env.ASSETS) {
       const assetRes = await env.ASSETS.fetch(request);
-      if (assetRes.status !== 404) {
+      // 正常アセット(2xx, 304)のみ直接返し、307/302リダイレクトや404はSPA fallback(index.html)へ流す
+      if ((assetRes.status >= 200 && assetRes.status < 300) || assetRes.status === 304) {
         return assetRes;
       }
       // SPA Fallback: /admin など直接アクセス時に index.html を返して React SPA で処理させる
