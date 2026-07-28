@@ -7,6 +7,127 @@ import { WorkspaceSubscriptionTab, WorkspaceAuditLogsTab } from 'cohive-frontend
 import { CreditCard, FileText, Loader, AlertCircle } from 'lucide-react';
 import { apiClient } from 'cohive-frontend/utils/apiClient';
 
+
+const AdminUpdateBanner: React.FC = () => {
+  const currentVersion = import.meta.env.VITE_APP_VERSION || '1.0.0';
+  const [latestVersion, setLatestVersion] = useState<string | null>(null);
+  const [isClosed, setIsClosed] = useState<boolean>(() => {
+    return sessionStorage.getItem('cohive_update_banner_closed') === 'true';
+  });
+
+  useEffect(() => {
+    const fetchLatestVersion = async () => {
+      try {
+        const res = await fetch('https://raw.githubusercontent.com/cohive-tms/cohive-cloudflare/main/package.json');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.version) {
+            setLatestVersion(data.version);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to check latest version:', err);
+      }
+    };
+    fetchLatestVersion();
+  }, []);
+
+  const isNewerVersion = (latest: string, current: string): boolean => {
+    try {
+      const parse = (v: string) => v.replace(/^v/, '').split('.').map(Number);
+      const [lMaj, lMin, lPat] = parse(latest);
+      const [cMaj, cMin, cPat] = parse(current);
+      if (isNaN(lMaj) || isNaN(cMaj)) return false;
+      if (lMaj !== cMaj) return lMaj > cMaj;
+      if (lMin !== cMin) return lMin > cMin;
+      return lPat > cPat;
+    } catch {
+      return false;
+    }
+  };
+
+  if (!latestVersion || isClosed || !isNewerVersion(latestVersion, currentVersion)) {
+    return null;
+  }
+
+  const handleClose = () => {
+    sessionStorage.setItem('cohive_update_banner_closed', 'true');
+    setIsClosed(true);
+  };
+
+  return (
+    <div style={{
+      background: 'linear-gradient(135deg, #1e1b4b 0%, #311042 100%)',
+      borderBottom: '1px solid rgba(139, 92, 246, 0.3)',
+      padding: '12px 24px',
+      color: '#e0e7ff',
+      fontSize: '14px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: '16px',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+      position: 'relative',
+      zIndex: 9999
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span style={{
+          background: 'rgba(139, 92, 246, 0.2)',
+          color: '#c084fc',
+          border: '1px solid rgba(139, 92, 246, 0.4)',
+          borderRadius: '4px',
+          padding: '2px 8px',
+          fontSize: '11px',
+          fontWeight: 'bold',
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em'
+        }}>
+          Update
+        </span>
+        <span>
+          新しいバージョン <strong>v{latestVersion}</strong> が利用可能です。（現在のバージョン: v{currentVersion}）
+        </span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <a 
+          href="https://github.com/cohive-tms/cohive-cloudflare" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          style={{
+            color: '#a5b4fc',
+            textDecoration: 'none',
+            fontWeight: 'bold',
+            fontSize: '13px',
+            transition: 'color 0.2s',
+          }}
+          onMouseOver={(e) => e.currentTarget.style.color = '#c7d2fe'}
+          onMouseOut={(e) => e.currentTarget.style.color = '#a5b4fc'}
+        >
+          GitHubで [Sync fork] を行う →
+        </a>
+        <button 
+          onClick={handleClose}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: '#94a3b8',
+            cursor: 'pointer',
+            fontSize: '16px',
+            padding: '4px 8px',
+            lineHeight: 1,
+            transition: 'color 0.2s'
+          }}
+          onMouseOver={(e) => e.currentTarget.style.color = '#f1f5f9'}
+          onMouseOut={(e) => e.currentTarget.style.color = '#94a3b8'}
+          title="閉じる"
+        >
+          &times;
+        </button>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const [isAdminPortalMode, setIsAdminPortalMode] = useState<boolean | null>(null);
   const [currentAdminPath, setCurrentAdminPath] = useState<string>('');
@@ -179,14 +300,19 @@ export default function App() {
     currentAdminPath,
     isWorkspaceSuspended,
     renderAdminDashboard: (path, setupReq, onSetupComplete) => (
-      <SaaSAdminDashboard
-        currentPath={path}
-        adminSetupRequired={setupReq}
-        onAdminSetupComplete={onSetupComplete}
-        onLogoutAdmin={() => {
-          window.location.reload();
-        }}
-      />
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        <AdminUpdateBanner />
+        <div style={{ flex: 1 }}>
+          <SaaSAdminDashboard
+            currentPath={path}
+            adminSetupRequired={setupReq}
+            onAdminSetupComplete={onSetupComplete}
+            onLogoutAdmin={() => {
+              window.location.reload();
+            }}
+          />
+        </div>
+      </div>
     ),
     renderPreparingScreen: () => (
       <div className="setup-container">

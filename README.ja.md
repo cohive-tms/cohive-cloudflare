@@ -23,16 +23,28 @@
 
 ## 🛠️ デプロイ方法 (Deploy Guide)
 
-### 1. デプロイボタンをクリックする
-以下の「Deploy to Cloudflare Pages」ボタンをクリックします。
+> 💡 **まず試してみたい方へ**
+> 本番デプロイを行う前にシステムの動作を確認したい場合は、[CoHive デモサイト（現在準備中）](#) をご利用ください。
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cospace-tms/cospace-cloudflare)
+CoHiveをセルフホスト（自身の環境へ導入）するには、リポジトリの **Fork** と **Cloudflare Pages** の連携が推奨されます。これにより、後からブラウザ上の操作だけで安全・簡単に最新バージョンへアップデートできます。
 
-> 💡 **自動アップデート機能について**  
-> ワンクリックデプロイで作成された環境には、本家の修正や新機能を毎日自動で同期・再デプロイする GitHub Actions が含まれているため、**公開後も完全放置で常に最新状態へアップデート**されます。  
-> 
-> **※自動アップデートを行いたくない場合（手動でコード管理やバージョン管理を行いたい場合）**  
-> ボタンを押さず、本リポジトリをご自身のアカウントに **`Fork`**（または `Use this template`）してデプロイしてください。その際、自動更新を止めるためにリポジトリ内の `.github/workflows/auto-sync.yml` ファイルを削除（または GitHub の Actions タブで Disable に設定）してください。
+### 1. リポジトリを Fork する
+1. GitHub上の画面右上の **[Fork]** ボタンをクリックし、ご自身のアカウントにリポジトリをコピー（Create fork）します。
+
+### 2. Cloudflare Pages へのデプロイ
+1. [Cloudflare ダッシュボード](https://dash.cloudflare.com/) にログインし、**[Workers & Pages]** ＞ **[作成]** ＞ **[Pages]** ＞ **[Git に接続]** を選択します。
+2. 先ほど Fork したご自身のリポジトリ（`cohive-cloudflare`）を選択し、**[セットアップの開始]** をクリックします。
+3. ビルド設定や環境変数の入力画面が表示されますが、**設定は何も変更せず（すべてデフォルトのまま）** ページ最下部の **[保存してデプロイ]** をクリックします。これで自動ビルドとプロビジョニングが開始されます。
+
+---
+
+## 🔄 アップデート方法 (Update Guide)
+
+管理者画面（`/admin`）に新しいバージョンのお知らせが表示された場合は、以下の手順で安全に最新状態へ更新できます。
+
+1. ご自身のGitHubのForkリポジトリページを開きます。
+2. コード一覧の上部にある **[Sync fork]** ＞ **[Update branch]** ボタンをクリックします。
+3. リポジトリが更新されると、Cloudflare Pagesが自動的に更新を検知して再デプロイを開始し、数分で最新状態が反映されます。
 
 ---
 

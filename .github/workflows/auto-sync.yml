@@ -1,31 +1,3 @@
-name: Automatic Sync with Upstream
-
-on:
-  schedule:
-    - cron: '0 19 * * *' # 毎日午前4時(JST)に自動チェック＆同期
-  workflow_dispatch:     # 手動で今すぐ同期したい時のボタン
-
-permissions:
-  contents: write
-
-jobs:
-  sync:
-    # 本家リポジトリ（cohive-tms/cohive-cloudflare）自体では動作させず、ユーザー環境のみで動作
-    if: github.repository != 'cohive-tms/cohive-cloudflare'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Sync from Upstream
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git remote add upstream https://github.com/cohive-tms/cohive-cloudflare.git || git remote set-url upstream https://github.com/cohive-tms/cohive-cloudflare.git
-          git fetch upstream
-          # 本家の最新コードをマージ
-          git merge upstream/main --allow-unrelated-histories -m "Chore: Auto sync from upstream" || exit 0
-          # 自分のリポジトリへPush
-          git push origin main
+# This workflow has been deprecated and disabled.
+# Automatic synchronization is now replaced with manual "Sync fork" button on GitHub,
+# combined with update alerts in the admin console.

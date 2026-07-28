@@ -21,21 +21,35 @@
 
 ---
 
-## 🛠️ One-Click Deployment
+## 🛠️ Deployment Guide
 
-Click the button below to start deploying your instance:
+> 💡 **Want to try it out first?**
+> If you'd like to test the system before deploying your own instance, please use the [CoHive Demo Site (Coming Soon)](#).
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cospace-tms/cospace-cloudflare)
+To self-host CoHive, it is highly recommended to **Fork** this repository and deploy it via **Cloudflare Pages**. This setup allows you to easily update your instance to the latest version with a single click.
 
-> 💡 **Automatic Updates**  
-> Repositories deployed via this button include a GitHub Actions workflow (`.github/workflows/auto-sync.yml`) that automatically syncs fixes and features from upstream daily, keeping your app **up-to-date automatically without manual action**.  
-> 
-> **※ Note for Manual Management:**  
-> If you prefer to manage updates manually, please **`Fork`** (or `Use this template`) this repository first. To stop automatic updates, simply delete the `.github/workflows/auto-sync.yml` file (or disable it under the GitHub Actions tab) in your repository.
+### 1. Fork the Repository
+1. Click the **[Fork]** button at the top-right of this page and copy the repository to your own GitHub account (Create fork).
+
+### 2. Deploy to Cloudflare Pages
+1. Log in to the [Cloudflare Dashboard](https://dash.cloudflare.com/).
+2. Navigate to **[Workers & Pages]** ＞ **[Create]** ＞ **[Pages]** ＞ **[Connect to Git]**.
+3. Select your Forked repository (`cohive-cloudflare`) and click **[Begin setup]**.
+4. On the configuration screen, **do not change any settings (leave everything as default)** and click **[Save and Deploy]** at the bottom of the page. This will start the automated build.
 
 ---
 
-## 📘 Setup & Deployment Guide
+## 🔄 Update Guide
+
+When a new version alert appears on your admin dashboard (`/admin`), you can update your instance easily and safely using these steps:
+
+1. Open your Forked repository page on GitHub.
+2. Click **[Sync fork]** ＞ **[Update branch]** at the top of the file list.
+3. Once updated, Cloudflare Pages will automatically detect the changes and trigger a re-deployment. Your app will be updated to the latest version within a few minutes.
+
+---
+
+## 📘 Step-by-Step Setup Guide
 
 This guide walks you through deploying **CoHive** and stepping up from initial trial to full production.
 
@@ -43,7 +57,7 @@ This guide walks you through deploying **CoHive** and stepping up from initial t
 
 ```mermaid
 flowchart TD
-    Step1["🚀 STEP 1: One-Click Deploy<br/>(Initial launch & instant testing)"] --> Step2["🔑 STEP 2: Configure ENCRYPTION_SECRET<br/>(Physical key-data separation against DB leaks)"]
+    Step1["🚀 STEP 1: Fork & Pages Deploy<br/>(Initial launch & instant testing)"] --> Step2["🔑 STEP 2: Configure ENCRYPTION_SECRET<br/>(Physical key-data separation against DB leaks)"]
     Step2 --> Step3["🌐 STEP 3: Custom Domain & Subdomains<br/>(URL setup & auto subdomain isolation)"]
     Step3 --> Step4["✉️ STEP 4: SMTP Email Config<br/>(Invitation emails & notifications)"]
     Step4 --> Option["🔒 OPTION: Cloudflare Zero Trust<br/>(Optional internal SSO protection)"]
@@ -51,10 +65,10 @@ flowchart TD
 
 ---
 
-### 🚀 STEP 1: One-Click Deployment (Trial & Quick Launch)
+### 🚀 STEP 1: Fork & Pages Deploy (Initial Deployment)
 
-1. **Run Deployment**  
-   Click the **[Deploy to Cloudflare]** button above and follow the prompts.
+1. **Complete Initial Deployment**  
+   Follow the "Deployment Guide" above to Fork the repository and deploy it to Cloudflare Pages.
 2. **Auto-provisioned Resources**  
    Pages Functions, D1 database (`cohive_db`), and R2 storage bucket are created automatically.
 3. **Instant Access & Verification**  

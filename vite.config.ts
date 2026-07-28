@@ -9,11 +9,14 @@ const frontendSrc = fs.existsSync(frontendSrcDir) && fs.readdirSync(frontendSrcD
   ? frontendSrcDir
   : path.resolve(__dirname, './node_modules/cohive-frontend/src');
 
+const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, './package.json'), 'utf-8'));
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
   define: {
-    'import.meta.env.VITE_SAAS_MODE': JSON.stringify('true')
+    'import.meta.env.VITE_SAAS_MODE': JSON.stringify('true'),
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(pkg.version)
   },
   resolve: {
     alias: {
