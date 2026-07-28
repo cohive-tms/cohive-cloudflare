@@ -26,7 +26,7 @@
 ### 1. デプロイボタンをクリックする
 以下の「Deploy to Cloudflare Pages」ボタンをクリックします。
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cohive-tms/cohive-cloudflare)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cospace-tms/cospace-cloudflare)
 
 > 💡 **自動アップデート機能について**  
 > ワンクリックデプロイで作成された環境には、本家の修正や新機能を毎日自動で同期・再デプロイする GitHub Actions が含まれているため、**公開後も完全放置で常に最新状態へアップデート**されます。  
@@ -137,7 +137,7 @@ flowchart TD
 
 ```bash
 # クローン
-git clone https://github.com/cohive-tms/cohive-cloudflare.git
+git clone https://github.com/cospace-tms/cospace-cloudflare.git
 cd cohive-cloudflare
 
 # 依存関係インストール

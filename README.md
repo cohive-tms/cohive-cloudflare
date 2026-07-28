@@ -25,7 +25,7 @@
 
 Click the button below to start deploying your instance:
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cohive-tms/cohive-cloudflare)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cospace-tms/cospace-cloudflare)
 
 > 💡 **Automatic Updates**  
 > Repositories deployed via this button include a GitHub Actions workflow (`.github/workflows/auto-sync.yml`) that automatically syncs fixes and features from upstream daily, keeping your app **up-to-date automatically without manual action**.  
@@ -129,7 +129,7 @@ Configures outgoing email for workspace invitations and notifications.
 
 ```bash
 # Clone repository
-git clone https://github.com/cohive-tms/cohive-cloudflare.git
+git clone https://github.com/cospace-tms/cospace-cloudflare.git
 cd cohive-cloudflare
 
 # Install dependencies
