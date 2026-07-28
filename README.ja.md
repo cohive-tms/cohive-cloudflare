@@ -1,5 +1,7 @@
 # 💼 CoHive Enterprise Edition
 
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
+
 維持費0円から運用できる、Cloudflare完全ネイティブの**マルチ組織（マルチテナント）・ガバナンス統合管理エディション**。
 
 > 🌐 **[English README is available here](./README.md)**

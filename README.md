@@ -1,5 +1,7 @@
 # 💼 CoHive Enterprise Edition
 
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
+
 **Zero-maintenance Cloudflare native multi-tenant workspace management, governance suite, and administration portal for CoHive.**
 
 > 🇯🇵 **[日本語ドキュメント・READMEはこちら](./README.ja.md)**
