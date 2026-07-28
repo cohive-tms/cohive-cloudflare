@@ -14,7 +14,7 @@
 * 🔐 **Super Admin Governance**: Admin management for tenant provisioning, resource limits (`SAAS_LIMITS`), workspace suspension, MFA (2-Factor Authentication) login protection, and system-wide announcements.
 * 📊 **Audit Log Management**: Centralized tracking of workspace actions and user access.  
   * ※ Viewing audit logs for the last 7 days is available to all users out of the box.  
-  * 💖 **[Sponsor-Only Feature]**: **Retention and viewing of audit logs older than 7 days** is exclusively available as a GitHub Sponsor benefit.
+  * 💖 **[Sponsor Feature - Planned]**: **Retention and viewing of audit logs older than 7 days** is planned as an upcoming GitHub Sponsor benefit (currently under verification).
 * 🌐 **Hybrid Domain Routing**: Supports path-based routing (`/w/tenant`) by default and automatically upgrades to wildcard subdomains (`tenant.yourdomain.com`).
 * 🔑 **Physical Key Separation Security**: Protects against D1 database leakage using the `ENCRYPTION_SECRET` environment variable to isolate sensitive data (SMTP credentials, etc.) from storage.
 * 💳 **Stripe Billing Integration (In Progress / Upcoming Feature)**: Automated subscription plan management via Stripe Checkout, webhook synchronization, and customer portal integration (currently under active development and verification).
@@ -147,8 +147,8 @@ This repository is licensed under the **[Apache License 2.0](./LICENSE)**. Pleas
 
 ### 💖 GitHub Sponsorship
 Thank you to all of our sponsors supporting the continuous development and maintenance of cohive!
-* **Sponsor-Only Benefits**:
-  * Unrestricted access and retention for audit log history beyond 7 days
+* **Sponsor Benefits (Upcoming)**:
+  * Unrestricted access and retention for audit log history beyond 7 days (planned/under verification)
   * Priority support and early access to new features
 
 For sponsorship details, please visit [GitHub Sponsors](https://github.com/sponsors/cohive-tms).
