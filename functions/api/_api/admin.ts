@@ -65,14 +65,46 @@ export async function handleVerifyAdminPath(request: Request, env: Env): Promise
       return new Response(JSON.stringify({ error: "Path is required" }), { status: 400, headers });
     }
 
-    const currentPathSetting = await env.DB.prepare(
-      "SELECT value FROM system_settings WHERE key = ?"
-    ).bind("saas_admin_path").first<{ value: string }>();
+    // system_settings テーブルが存在しない場合は自動作成
+    try {
+      await env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS system_settings (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          updated_at TEXT
+        )
+      `).run();
+    } catch (_) {}
 
-    const currentPath = currentPathSetting?.value || "admin";
+    let currentPath = "admin";
+    try {
+      const currentPathSetting = await env.DB.prepare(
+        "SELECT value FROM system_settings WHERE key = ?"
+      ).bind("saas_admin_path").first<{ value: string }>();
+      if (currentPathSetting?.value) {
+        currentPath = currentPathSetting.value;
+      }
+    } catch (_) {}
+
     const isValid = path === currentPath;
 
-    return new Response(JSON.stringify({ success: true, valid: isValid }), { status: 200, headers });
+    // SaaS管理者がまだ登録されていない場合は setupRequired = true
+    let setupRequired = false;
+    if (isValid) {
+      try {
+        const { results } = await env.DB.prepare(
+          "SELECT COUNT(*) as count FROM saas_admins"
+        ).all<{ count: number }>();
+        const count = results?.[0]?.count ?? 0;
+        if (count === 0) {
+          setupRequired = true;
+        }
+      } catch (_) {
+        setupRequired = true;
+      }
+    }
+
+    return new Response(JSON.stringify({ success: true, valid: isValid, setupRequired }), { status: 200, headers });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message || "Internal Server Error" }), { status: 500, headers });
   }
