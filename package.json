@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prebuild": "git submodule update --init --recursive || true",
+    "prebuild": "git submodule init && git submodule sync && git submodule update --init --recursive || true",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
