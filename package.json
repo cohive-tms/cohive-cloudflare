@@ -1,8 +1,11 @@
 {
-  "name": "cohive",
+  "name": "cohive-cloudflare",
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "frontend"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "vite build",
