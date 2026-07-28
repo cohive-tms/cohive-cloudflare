@@ -1,20 +1,21 @@
 # 💼 CoHive Enterprise Edition
 
-**Enterprise multi-tenant management portal, governance suite, and administration for CoHive.**
+**Zero-maintenance Cloudflare native multi-tenant workspace management, governance suite, and administration portal for CoHive.**
 
-> 💖 **Sponsors Only**: This repository is exclusively available to **GitHub Sponsors** of the CoHive project. Sponsors are permitted to use, modify, and deploy this software for both commercial and non-commercial purposes.
-> 
 > 🇯🇵 **[日本語ドキュメント・READMEはこちら](./README.ja.md)**
 
 ---
 
 ## 🌟 Features
 
-* 🏢 **Multi-Tenant Administration**: Manage multiple workspace instances, databases, and custom domain routing from a unified admin dashboard.
-* 🔐 **Super Admin Management**: Admin APIs for user provisioning, tenant limits (`SAAS_LIMITS`), and workspace lifecycle operations.
-* 🌐 **Hybrid Domain Routing**: Supports path-based routing out-of-the-box (`/w/tenant`) and automatically upgrades to wildcard subdomains (`tenant.yourdomain.com`).
-* 📊 **Usage & Audit Insights**: Track activity across multi-company environments.
-* 💳 **Stripe Billing Integration (In Progress)**: Automated plan upgrade via Stripe Checkout, webhook synchronization, and customer portal management (currently under active development).
+* 🏢 **Multi-Tenant Administration**: Manage multiple workspace instances, D1 databases, R2 storage, and custom domain routing from a unified admin dashboard.
+* 🔐 **Super Admin Governance**: Admin management for tenant provisioning, resource limits (`SAAS_LIMITS`), workspace suspension, MFA (2-Factor Authentication) login protection, and system-wide announcements.
+* 📊 **Audit Log Management**: Centralized tracking of workspace actions and user access.  
+  * ※ Viewing audit logs for the last 7 days is available to all users out of the box.  
+  * 💖 **[Sponsor-Only Feature]**: **Retention and viewing of audit logs older than 7 days** is exclusively available as a GitHub Sponsor benefit.
+* 🌐 **Hybrid Domain Routing**: Supports path-based routing (`/w/tenant`) by default and automatically upgrades to wildcard subdomains (`tenant.yourdomain.com`).
+* 🔑 **Physical Key Separation Security**: Protects against D1 database leakage using the `ENCRYPTION_SECRET` environment variable to isolate sensitive data (SMTP credentials, etc.) from storage.
+* 💳 **Stripe Billing Integration (In Progress / Upcoming Feature)**: Automated subscription plan management via Stripe Checkout, webhook synchronization, and customer portal integration (currently under active development and verification).
 
 ---
 
@@ -138,18 +139,14 @@ npm run dev
 
 ---
 
-## 📄 License & Commercial Terms
+## 📄 License & Sponsorship
 
-This repository is governed by the **[Sponsor-Only Commercial & SaaS Provider License](./LICENSE)**.
+This repository is made available under open-source terms. Please refer to the [LICENSE](./LICENSE) file for full license terms.
 
-* ✅ **Permitted Uses**:
-  * Deployment, modification, and internal operations.
-  * **Operating as a commercial SaaS or managed service for third-party clients and customers** (deploying to your own Cloudflare account and reselling access as a branded service).
-* ❌ **Restricted Uses**:
-  * Redistribution, reselling, or sharing of the raw **source code itself** to third parties.
+### 💖 GitHub Sponsorship
+Thank you to all of our sponsors supporting the continuous development and maintenance of cohive!
+* **Sponsor-Only Benefits**:
+  * Unrestricted access and retention for audit log history beyond 7 days
+  * Priority support and early access to new features
 
----
-
-## 💖 Thank You Sponsors!
-
-Your sponsorship makes the continued development and maintenance of cohive possible!
+For sponsorship details, please visit [GitHub Sponsors](https://github.com/sponsors/cohive-tms).
