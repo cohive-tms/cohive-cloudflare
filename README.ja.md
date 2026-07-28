@@ -149,7 +149,7 @@ npm run dev
 
 ## 📄 ライセンス & スポンサー (License & Sponsorship)
 
-本リポジトリはオープンソースとして公開されています。詳細なライセンス条件については [LICENSE](./LICENSE) をご確認ください。
+本リポジトリは **[Apache License 2.0](./LICENSE)** のもとでオープンソースとして公開されています。詳細なライセンス条件については [LICENSE](./LICENSE) をご確認ください。
 
 ### 💖 GitHub Sponsors について
 cohive プロジェクトの開発および継続的なメンテナンスを支えていただき、心より感謝申し上げます！

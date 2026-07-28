@@ -141,7 +141,7 @@ npm run dev
 
 ## 📄 License & Sponsorship
 
-This repository is made available under open-source terms. Please refer to the [LICENSE](./LICENSE) file for full license terms.
+This repository is licensed under the **[Apache License 2.0](./LICENSE)**. Please refer to the [LICENSE](./LICENSE) file for full terms and conditions.
 
 ### 💖 GitHub Sponsorship
 Thank you to all of our sponsors supporting the continuous development and maintenance of cohive!
