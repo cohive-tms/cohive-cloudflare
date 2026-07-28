@@ -1,5 +1,5 @@
 #:schema node_modules/wrangler/config-schema.json
-name = "cohive-saas"
+name = "cohive"
 compatibility_date = "2026-07-02"
 
 [assets]
@@ -8,12 +8,12 @@ binding = "ASSETS"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "cohive_saas_db"
+database_name = "cohive_db"
 migrations_dir = "./migrations"
 
 [[r2_buckets]]
 binding = "BUCKET"
-bucket_name = "cohive-saas-storage"
+bucket_name = "cohive-storage"
 
 [vars]
 ENVIRONMENT = "production"

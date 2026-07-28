@@ -1,5 +1,5 @@
 {
-  "name": "cohive-saas",
+  "name": "cohive",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-      "pages:dev": "wrangler pages dev ./dist --ip 127.0.0.1 --binding ENVIRONMENT=development --persist-to=.wrangler/state",
+    "pages:dev": "wrangler pages dev ./dist --ip 127.0.0.1 --binding ENVIRONMENT=development --persist-to=.wrangler/state",
     "submodule:init": "git submodule update --init --recursive",
     "submodule:update": "git submodule update --remote"
   },

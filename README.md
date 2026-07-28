@@ -56,7 +56,7 @@ flowchart TD
 1. **Run Deployment**  
    Click the **[Deploy to Cloudflare]** button above and follow the prompts.
 2. **Auto-provisioned Resources**  
-   Pages Functions, D1 database (`cohive_saas_db`), and R2 storage bucket are created automatically.
+   Pages Functions, D1 database (`cohive_db`), and R2 storage bucket are created automatically.
 3. **Instant Access & Verification**  
    Access your generated default URL (e.g., `https://xxx.pages.dev`).
    * **Behavior**: Without custom domain configuration, path-based multi-tenancy (`https://xxx.pages.dev/w/tenant-a/login`) works **out of the box with zero manual config**.
