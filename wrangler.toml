@@ -1,41 +1,27 @@
 #:schema node_modules/wrangler/config-schema.json
-name = "cohive"
+name = "cohive-saas"
 compatibility_date = "2026-07-02"
-main = "worker.ts"
 
 [assets]
 directory = "./dist"
 binding = "ASSETS"
-not_found_handling = "single-page-application"
 
-
-# ------------------------------------------------------------------------------
-# 1. Cloudflare D1 (SQL Database) Binding
-# ------------------------------------------------------------------------------
 [[d1_databases]]
 binding = "DB"
-database_name = "cohive_db"
+database_name = "cohive_saas_db"
 migrations_dir = "./migrations"
 
-# ------------------------------------------------------------------------------
-# 2. Cloudflare R2 (Object Storage) Binding
-# ------------------------------------------------------------------------------
 [[r2_buckets]]
 binding = "BUCKET"
-bucket_name = "cohive-storage"
+bucket_name = "cohive-saas-storage"
 
-# ------------------------------------------------------------------------------
-# 3. 環境変数定義
-# ------------------------------------------------------------------------------
 [vars]
 ENVIRONMENT = "production"
+SAAS_MODE = "true"
 
-# ------------------------------------------------------------------------------
-# 4. レートリミット (Workers Rate Limiting)
-# ------------------------------------------------------------------------------
 [[ratelimits]]
 name = "RATE_LIMITER"
-namespace_id = "1001"
+namespace_id = "1002"
 
 [ratelimits.simple]
 limit = 20

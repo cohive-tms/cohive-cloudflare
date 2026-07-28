@@ -167,7 +167,6 @@ export async function sendMail(settings: SmtpSettings, options: MailOptions): Pr
   const fromEmail = user; // 送信者は基本認証ユーザーのものを利用
 
   // Cloudflare Workers の connect() でTCP接続
-  // ポート465 (SMTPS) は最初からセキュア、それ以外はSTARTTLS等（本実装では簡略化のため465をセキュア通信として推奨）
   const socket = connect(`${host}:${port}`, {
     secureTransport: port === 465 ? "on" : "off",
     allowHalfOpen: false,

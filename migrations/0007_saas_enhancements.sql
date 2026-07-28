@@ -1,2 +1,1 @@
--- This migration file has been emptied as the SaaS feature is moved/managed in cohive-cloudflare-saas.
--- Workspace subscription details and audit logs tables are not needed in standalone mode.
+-- This migration file is included for sequence compatibility.

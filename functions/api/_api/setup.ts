@@ -88,7 +88,6 @@ export async function verifyPassword(password: string, storedHash: string): Prom
     const saltHex = parts[2];
     const originalHashHex = parts[3];
     
-    // Hex文字列をUint8Arrayに復元
     const salt = new Uint8Array(
       saltHex.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || []
     );
@@ -231,7 +230,6 @@ export async function handleSetupRegister(request: Request, env: Env): Promise<R
       insertChannel
     ]);
 
-    // JWT_SECRETを自動生成または取得してD1に保存する
     let secret = "";
     try {
       const existingSecret = await env.DB.prepare(
@@ -248,7 +246,6 @@ export async function handleSetupRegister(request: Request, env: Env): Promise<R
       }
     } catch (e) {
       console.error("Failed to setup jwt_secret in D1 database:", e);
-      // 万が一マイグレーションが適用されていないなどの場合は、その場しのぎで動的生成したキーを使う
       secret = generateRandomSecret();
     }
 

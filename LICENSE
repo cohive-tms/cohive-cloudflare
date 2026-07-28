@@ -1,21 +1,18 @@
-MIT License
+Sponsor-Only Commercial & SaaS Provider License
 
 Copyright (c) 2026 cohive
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This software and associated documentation files (the "Software") are made available exclusively to active sponsors or authorized entities granted explicit access by the copyright holder.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+TERMS AND CONDITIONS:
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+1. PERMITTED USES (許可される利用形態):
+   - Internal & Personal Use: You are permitted to use, modify, and deploy the Software for your personal or internal business operations.
+   - Commercial SaaS & Reseller Hosting (商用SaaS提供・再販売の許可): You are permitted to host, deploy, and operate the Software as a managed SaaS service or hosted collaboration solution for third parties, clients, or customers (whether for fee or gratis).
+
+2. RESTRICTIONS (禁止事項):
+   - SOURCE CODE REDISTRIBUTION PROHIBITED (ソースコード自体の再配布禁止): You may NOT redistribute, publish, sublicense, sell, share, or make available the raw source code (or modified versions of the source code) of the Software to any third party.
+   - SPONSORSHIP REQUIREMENT: Access and rights under this license are contingent upon maintaining active sponsorship status or explicit authorization from the copyright holder.
+
+3. DISCLAIMER:
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

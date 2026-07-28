@@ -1,212 +1,155 @@
-# 💬 CoHive
+# 💼 CoHive Enterprise Edition
 
-A zero-cost, fully self-hosted, and ultra-lightweight business collaboration platform.
+**Enterprise multi-tenant management portal, governance suite, and administration for CoHive.**
 
-> 🇯🇵 **[日本語版 README はこちら (Japanese Documentation)](./README.ja.md)**
-
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cohive-tms/cohive-cloudflare)
-[![Live Demo](https://img.shields.io/badge/Live_Demo-Try_Now-brightgreen?style=flat-square&logo=cloudflare)](https://demo.cohive.dev)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+> 💖 **Sponsors Only**: This repository is exclusively available to **GitHub Sponsors** of the CoHive project. Sponsors are permitted to use, modify, and deploy this software for both commercial and non-commercial purposes.
+> 
+> 🇯🇵 **[日本語ドキュメント・READMEはこちら](./README.ja.md)**
 
 ---
 
-## 🌟 Overview
+## 🌟 Features
 
-**CoHive** is an ultra-lightweight, fully independent (self-hosted) business communication and collaboration application designed to break you free from vendor lock-in, soaring monthly fees, and data limits of proprietary platforms.
-
-By leveraging Cloudflare’s powerful serverless ecosystem (Pages, Workers, D1, R2), you can deploy a secure, private collaboration environment to your own infrastructure with a single click.
-
-* 🚀 **[Try Live Demo](https://demo.cohive.dev)** (Explore without installation)
-* 🔒 **[Privacy Policy](./PRIVACY.md)** (Zero data tracking / selling guaranteed)
-* 📄 **[Terms of Service](./TERMS.md)**
+* 🏢 **Multi-Tenant Administration**: Manage multiple workspace instances, databases, and custom domain routing from a unified admin dashboard.
+* 🔐 **Super Admin Management**: Admin APIs for user provisioning, tenant limits (`SAAS_LIMITS`), and workspace lifecycle operations.
+* 🌐 **Hybrid Domain Routing**: Supports path-based routing out-of-the-box (`/w/tenant`) and automatically upgrades to wildcard subdomains (`tenant.yourdomain.com`).
+* 📊 **Usage & Audit Insights**: Track activity across multi-company environments.
+* 💳 **Stripe Billing Integration (In Progress)**: Automated plan upgrade via Stripe Checkout, webhook synchronization, and customer portal management (currently under active development).
 
 ---
 
-## 🚀 Key Features
+## 🛠️ One-Click Deployment
 
-| Feature | Description |
-| :--- | :--- |
-| 🛡️ **Full Multi-Tenancy** | Automatically provisions a dedicated **Cloudflare D1 database** for each organization/company, ensuring enterprise-grade security and privacy. |
-| 🍃 **Eco-Polling** | Replaces resource-heavy WebSockets with smart polling. It automatically slows down or pauses requests when a tab is inactive, dramatically reducing server load. |
-| ⚡ **Optimistic UI** | Experience zero-latency communication. Sent messages appear in the chat instantly without waiting for server round-trips. |
-| 📅 **Task & Calendar Integration** | A built-in Kanban task board integrated with a calendar to keep your team's schedule and tasks aligned. |
-| 📝 **Co-editing Documents** | Live-editable Markdown documents shared across the workspace or individual channels. |
-| 📁 **Secure Media Library** | An access-controlled asset library syncing with chat permissions to securely browse, upload, and manage files. |
-| 💰 **Zero Infrastructure Cost** | Run your entire team's operations for $0/month by fitting comfortably within Cloudflare's generous **Free Tier**. |
+Click the button below to start deploying your Enterprise instance:
 
----
-
-## 🛠️ Deployment Guide (Step-by-Step)
-
-### 📋 Prerequisites
-Before you begin, ensure you have:
-* A **Cloudflare Account** (Free tier is completely fine).
-* A **GitHub Account** (Required for Cloudflare Pages integration).
-
----
-
-### 1. Click the Deploy Button
-Click the button below to start the deployment process:
-
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cohive-tms/cohive-cloudflare)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cohive-tms/cohive-cloudflare-saas)
 
 > 💡 **Automatic Updates**  
 > Repositories deployed via this button include a GitHub Actions workflow (`.github/workflows/auto-sync.yml`) that automatically syncs fixes and features from upstream daily, keeping your app **up-to-date automatically without manual action**.  
 > 
 > **※ Note for Manual Management:**  
-> If you prefer to manage updates manually or customize the codebase yourself, please **`Fork`** (or `Use this template`) this repository into your account first. To stop automatic updates, simply delete the `.github/workflows/auto-sync.yml` file (or disable it under the GitHub Actions tab) in your repository.
-
-### 2. Authorize & Deploy on Cloudflare
-1. Log in to (or sign up for) your Cloudflare dashboard and authorize GitHub access.
-2. Cloudflare will **automatically import** this repository into your own GitHub account.
-3. Build configurations and database bindings will be **automatically populated** based on `wrangler.toml`. Simply click "Connect" and "Deploy".
-
-### 3. Visit the URL & Register
-Once deployed, Cloudflare will provide a `https://xxx.pages.dev` URL. 
-Visiting this URL for the first time will **automatically initialize the D1 database tables**. Fill out the administrator setup form, and you are ready to go!
+> If you prefer to manage updates manually, please **`Fork`** (or `Use this template`) this repository first. To stop automatic updates, simply delete the `.github/workflows/auto-sync.yml` file (or disable it under the GitHub Actions tab) in your repository.
 
 ---
 
-## 🚀 Production Setup Checklist
+## 📘 Setup & Deployment Guide
 
-When moving your deployment into active production for your team or organization, we strongly recommend following these setup steps to ensure optimal security and operational readiness.
+This guide walks you through deploying **CoHive Enterprise Edition** and stepping up from initial trial to full enterprise production.
+
+### 🗺️ Setup Roadmap
 
 ```mermaid
 flowchart TD
-    Step1["🚀 STEP 1: One-Click Deploy<br/>(Initial setup & Admin registration)"] --> Step2["🔑 STEP 2: Configure ENCRYPTION_SECRET<br/>(Physical key-data separation against DB leaks)"]
-    Step2 --> Step3["✉️ STEP 3: Configure SMTP Email<br/>(Invitations, MFA & Offline notifications)"]
-    Step3 --> Step4["🌐 STEP 4: Custom Domain & Access Rules<br/>(CORS restriction, WAF & Zero Trust)"]
+    Step1["🚀 STEP 1: One-Click Deploy<br/>(Initial launch & instant testing)"] --> Step2["🔑 STEP 2: Configure ENCRYPTION_SECRET<br/>(Physical key-data separation against DB leaks)"]
+    Step2 --> Step3["🌐 STEP 3: Custom Domain & Subdomains<br/>(URL setup & auto subdomain isolation)"]
+    Step3 --> Step4["✉️ STEP 4: SMTP Email Config<br/>(Invitation emails & notifications)"]
+    Step4 --> Option["🔒 OPTION: Cloudflare Zero Trust<br/>(Optional internal SSO protection)"]
 ```
 
-### 1. 🔑 Strongly Recommended: Set `ENCRYPTION_SECRET` Environment Variable
-By default (without environment variables), encryption keys are auto-generated and stored directly inside the D1 database.  
-To **completely eliminate the risk of decrypted credentials in the event of a full D1 database leak**, you should store your encryption secret in Cloudflare Workers environment variables (Secrets).
+---
 
-* **Setup Instructions**:
-  1. Go to Cloudflare Dashboard > **Workers & Pages** > Select your deployed project.
-  2. Navigate to **Settings > Environment Variables**.
-  3. Click **Add variable** and configure:
+### 🚀 STEP 1: One-Click Deployment (Trial & Quick Launch)
+
+1. **Run Deployment**  
+   Click the **[Deploy to Cloudflare]** button above and follow the prompts.
+2. **Auto-provisioned Resources**  
+   Pages Functions, D1 database (`cohive_saas_db`), and R2 storage bucket are created automatically.
+3. **Instant Access & Verification**  
+   Access your generated default URL (e.g., `https://xxx.pages.dev`).
+   * **Behavior**: Without custom domain configuration, path-based multi-tenancy (`https://xxx.pages.dev/w/tenant-a/login`) works **out of the box with zero manual config**.
+
+---
+
+### 🔑 STEP 2: Configure ENCRYPTION_SECRET (Physical Key Separation)
+
+To **completely eliminate the risk of decrypted credentials in the event of a full D1 database leak**, storing your encryption key in Cloudflare Workers environment variables (Secrets) is strongly recommended.
+
+1. **Setup Steps**:
+   * Go to Cloudflare Dashboard > **Workers & Pages** > Select your deployed Pages project.
+   * Navigate to **Settings > Environment Variables**.
+   * Click **Add variable** and configure:
      - **Variable name**: `ENCRYPTION_SECRET`
      - **Value**: A random 32+ byte secret string (e.g. generated via `openssl rand -hex 32`)
      - **Type**: `Secret (Encrypted)`
 
 > 💡 **Physical Separation Benefit**  
-> This physically separates the decryption key from the D1 database storage. Even if your entire D1 database dump is compromised, sensitive values like SMTP passwords **cannot be decrypted**.
+> This physically separates the decryption key from the D1 database storage. Even if your D1 database is compromised, sensitive values like tenant SMTP passwords **cannot be decrypted**.
 
 ---
 
-### 2. ✉️ Recommended: Configure SMTP Email Settings
-By default, email sending is **optional**. However, without email settings, you must rely on:
-* **Recovery Code** for administrator password recovery (provided during setup).
-* **Temporary passwords** issued by the administrator for other workspace members.
+### 🌐 STEP 3: Custom Domain & Wildcard Subdomains (Recommended for Production)
 
-To unlock full capabilities (automated workspace invitation emails, offline notifications, and MFA), log in as an administrator, navigate to **Workspace Settings > Email Sending Settings**, and enter your SMTP server credentials (e.g., Google App Password or SMTP credentials from your provider).
+To prevent password manager confusion and optimize branding, bind a custom domain.
 
----
-
-## 💡 Under the Hood: What happens in Cloudflare?
-
-When you click deploy, Cloudflare provisions and configures the following resources automatically in your account:
-
-1. **Pages Project**: Hosts the frontend assets and backend serverless API (Functions).
-2. **D1 Database (SQL)**: Automatically creates a database named `cohive_db`.
-3. **R2 Bucket (Object Storage)**: Automatically creates a storage bucket named `cohive-storage` for attachments/media.
-4. **Binding**: Automatically connects the D1 Database and R2 Bucket to your Pages Functions.
-5. **Database Initialization**: On your first visit to the deployment URL, the application code automatically executes schema creation (no manual SQL execution needed).
+1. **Set Wildcard DNS in Cloudflare**
+   * In your Cloudflare DNS manager for your domain (e.g., `yourdomain.com`), add a CNAME record:
+     * **Type**: `CNAME`
+     * **Name**: `*` (Target all subdomains)
+     * **Target**: `xxx.pages.dev` (Your URL from STEP 1)
+     * **Proxy status**: 🟧 Proxied
+2. **Bind Custom Domain in Pages**
+   * In Cloudflare Pages Custom Domains, add `yourdomain.com` and `*.yourdomain.com`.
+3. **Automatic Subdomain Upgrade**
+   * Tenant "Company A" is now accessible at `https://tenant-a.yourdomain.com` with clean domain-isolated login and session security.
 
 ---
 
-## 🔒 Security Best Practices (Cloudflare Configuration)
+### ✉️ STEP 4: SMTP Email Configuration
 
-For production deployments, we strongly recommend implementing the following security measures in your Cloudflare Dashboard:
+Configures outgoing email for workspace invitations and notifications.
 
-### 1. Physical Key Separation (`ENCRYPTION_SECRET`)
-Set `ENCRYPTION_SECRET` in Cloudflare Pages Environment Variables as described above to physically separate the encryption key from D1 storage.
-
-### 2. Restrict CORS Origins (`ALLOWED_ORIGINS`)
-Set `ALLOWED_ORIGINS` to your production domain (e.g., `https://chat.yourcompany.com`) to prevent unauthorized cross-origin API requests from third-party websites.
-
-### 3. Web Application Firewall (WAF) Rules
-Configure custom WAF rules to protect your application from malicious bots and unauthorized access:
-* **Geoblocking**: If your team is located in a specific country, restrict access to that country only.
-  - *Rule Expression*: `(ip.geoip.country ne "JP")` -> Action: *Block* (Replace `JP` with your country code).
-* **IP Whitelisting**: If you have a static office IP, you can lock down access to your IP only.
-
-### 4. Cloudflare Zero Trust (Access)
-Add an extra layer of protection by placing Cloudflare Access in front of your deployment:
-* Go to Cloudflare Dashboard > **Zero Trust** > **Access** > **Applications**.
-* Create a self-hosted application for your cohive domain.
-* Set up a policy requiring identity verification (like Email One-Time Pin or Google Workspace OAuth) before anyone can access the site. This fully protects your application from exposure even if there are unpatched software vulnerabilities.
+1. **Log in to Admin Console**: Go to `https://yourdomain.com/admin` as Super Admin.
+2. **Configure SMTP**: Under **System Settings** > **Email Settings**, enter:
+   * **SMTP Host**: (e.g., `smtp.sendgrid.net` or your mail server)
+   * **Port**: `587` or `465`
+   * **Sender Email**: `noreply@yourdomain.com` (from domain configured in STEP 3)
+   * **Credentials**: Username & Password / API Key
+3. **Verify**: Send a test email to ensure invitation emails arrive properly.
 
 ---
 
-## ⚙️ Environment Variables
+### 🔒 OPTION: Cloudflare Zero Trust (Access) Integration
 
-| Variable | Required | Description |
-| :--- | :--- | :--- |
-| `ENCRYPTION_SECRET` | **Recommended for Prod** | 32-byte secret used to encrypt sensitive configuration (e.g., SMTP passwords) using AES-GCM. Setting this physically separates the key from D1 database storage. |
-| `ALLOWED_ORIGINS` | Optional | Comma-separated list of allowed CORS origins (e.g., `https://cohive.dev,https://app.cohive.dev`). |
-| `JWT_SECRET` | Optional | Custom secret key for signing JWT tokens. Auto-generated and stored in D1 database on setup if omitted. |
-| `R2_ACCESS_KEY_ID` | Optional | Cloudflare R2 Access Key ID (required for generating S3 presigned URLs & direct uploads). |
-| `R2_SECRET_ACCESS_KEY` | Optional | Cloudflare R2 Secret Access Key. |
-| `R2_ACCOUNT_ID` | Optional | Cloudflare Account ID for R2 endpoints. |
+> ⚠️ **Note**: Enable Cloudflare Zero Trust **only if this instance is strictly for internal company use**. For open or multi-company client access, Zero Trust SSO creates unnecessary double-login barriers.
+
+#### Setup Steps (Strictly Internal Enterprise Usage)
+
+1. In Cloudflare Dashboard, go to **Zero Trust** > **Access** > **Applications**.
+2. Select **Add an Application** > **Self-hosted**.
+3. **Domain**: `yourdomain.com` (or specific subdomains).
+4. **Identity Providers**: Bind Google Workspace, Microsoft Entra ID, GitHub, etc.
+5. **Policy**: Allow your organization's domain (e.g., `@yourcompany.com`) and save.
 
 ---
 
-## 💻 Local Development Guide
+## 🛠️ Repository Structure & Setup
 
-Steps for local development and testing:
-
-### 1. Install Dependencies
 ```bash
+# Clone repository
+git clone https://github.com/cohive-tms/cohive-cloudflare-saas.git
+cd cohive-cloudflare-saas
+
+# Install dependencies
 npm install
-```
 
-### 2. Configure Local Settings
-Copy `wrangler.example.toml` to `wrangler.toml` and fill in your Cloudflare resource IDs:
-```bash
-cp wrangler.example.toml wrangler.toml
-```
-
-### 3. Run Local Servers
-Start both Vite frontend server and Pages Functions API server:
-
-**Terminal 1 (API Server):**
-```bash
-npm run pages:dev
-```
-
-**Terminal 2 (Frontend Dev Server):**
-```bash
+# Start local dev server
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+---
+
+## 📄 License & Commercial Terms
+
+This repository is governed by the **[Sponsor-Only Commercial & SaaS Provider License](./LICENSE)**.
+
+* ✅ **Permitted Uses**:
+  * Deployment, modification, and internal operations.
+  * **Operating as a commercial SaaS or managed service for third-party clients and customers** (deploying to your own Cloudflare account and reselling access as a branded service).
+* ❌ **Restricted Uses**:
+  * Redistribution, reselling, or sharing of the raw **source code itself** to third parties.
 
 ---
 
-## ⚠️ Disclaimer & Important Notes
+## 💖 Thank You Sponsors!
 
-### 🧪 1. Beta Status (Public Preview)
-* **CoHive** is currently provided as a **Beta / Public Preview** release.
-* Unintended bugs, breaking changes, or database schema updates may occur in future versions. Regular backups are recommended for critical data.
-
-### 🛡️ 2. Disclaimer of Warranty & Liability
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, DATA LOSS, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-### 💬 3. Support & Feedback Policy
-* CoHive is an open-source project created by an individual developer. Dedicated 24/7 technical support or guaranteed SLA is not provided.
-* Please report bugs and feature requests via [GitHub Issues](https://github.com/cohive-tms/cohive-cloudflare/issues) (handled on a best-effort basis).
-
-### 💼 4. Sponsor Edition (SaaS / Multi-Workspace Edition)
-* The private repository provided to sponsors serves as a token of gratitude for supporting ongoing development. It does not constitute a commercial product warranty or Enterprise SLA.
-
----
-
-## 📄 License & Policies
-
-* **License**: [MIT License](./LICENSE)
-* **Privacy Policy**: [PRIVACY.md](./PRIVACY.md)
-* **Terms of Service**: [TERMS.md](./TERMS.md)
-* **Security Policy**: [SECURITY.md](./SECURITY.md)
+Your sponsorship makes the continued development and maintenance of cohive possible!

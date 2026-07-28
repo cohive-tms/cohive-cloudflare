@@ -221,4 +221,3 @@ export function getCookieOptions(
     sameSite: sameSite as "Lax" | "None" | "Strict",
   };
 }
-

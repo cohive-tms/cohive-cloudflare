@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["DOM", "DOM.Iterable", "ES2020"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+
+    /* Paths mapping for Core */
+    "baseUrl": ".",
+    "paths": {
+      "cohive-frontend": ["./frontend/src"],
+      "cohive-frontend/*": ["./frontend/src/*"],
+      "cohive-cloudflare": ["./functions/api/_api"],
+      "cohive-cloudflare/*": ["./functions/api/_api/*"]
+    }
+  },
+  "include": ["src", "functions"]
+}
