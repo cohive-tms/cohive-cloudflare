@@ -700,14 +700,31 @@ export const onRequest: PagesFunction<any> = async (context) => {
 };
 
 export default {
-  fetch(request: Request, env: any, ctx: any) {
-    return onRequest({
-      request,
-      env,
-      params: {},
-      waitUntil: ctx?.waitUntil ? ctx.waitUntil.bind(ctx) : () => {},
-      passThroughOnException: () => {},
-      next: () => Promise.resolve(new Response('Not Found', { status: 404 }))
-    } as any);
+  async fetch(request: Request, env: any, ctx: any) {
+    const url = new URL(request.url);
+
+    // 1. APIエンドポイント (/api/...) のハンドリング
+    if (url.pathname.startsWith('/api/')) {
+      return onRequest({
+        request,
+        env,
+        params: {},
+        waitUntil: ctx?.waitUntil ? ctx.waitUntil.bind(ctx) : () => {},
+        passThroughOnException: () => {},
+        next: () => Promise.resolve(new Response('Not Found', { status: 404 }))
+      } as any);
+    }
+
+    // 2. SPA/静的ファイルのリクエスト処理 (SPAルーティングフォールバック)
+    if (env.ASSETS) {
+      const assetRes = await env.ASSETS.fetch(request);
+      if (assetRes.status !== 404) {
+        return assetRes;
+      }
+      // SPA Fallback: /admin など直接アクセス時に index.html を返して React SPA で処理させる
+      return env.ASSETS.fetch(new Request(new URL('/index.html', request.url), request));
+    }
+
+    return new Response('Not Found', { status: 404 });
   }
 };
