@@ -13,6 +13,7 @@
     "submodule:update": "git submodule update --remote"
   },
   "dependencies": {
+    "cohive-frontend": "git+https://github.com/cospace-tms/cospace-frontend.git",
     "lucide-react": "^0.395.0",
     "marked": "^12.0.0",
     "prismjs": "^1.29.0",

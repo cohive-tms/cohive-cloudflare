@@ -1,6 +1,13 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import fs from 'fs';
+
+// Use local submodule if exists, fallback to node_modules for automated deploy environments
+const frontendSrcDir = path.resolve(__dirname, './frontend/src');
+const frontendSrc = fs.existsSync(frontendSrcDir) && fs.readdirSync(frontendSrcDir).length > 0
+  ? frontendSrcDir
+  : path.resolve(__dirname, './node_modules/cohive-frontend/src');
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -10,7 +17,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      'cohive-frontend': path.resolve(__dirname, './frontend/src'),
+      'cohive-frontend': frontendSrc,
       'cohive-cloudflare': path.resolve(__dirname, './functions/api/_api')
     }
   },
