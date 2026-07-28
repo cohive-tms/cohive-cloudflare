@@ -1,8 +1,8 @@
-# 💼 CoHive Enterprise Edition
+# 💼 CoHive
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
 
-維持費0円から運用できる、Cloudflare完全ネイティブの**マルチ組織（マルチテナント）・ガバナンス統合管理エディション**。
+維持費0円から運用できる、Cloudflare完全ネイティブの**マルチテナント対応ワークスペース管理プラットフォーム**。
 
 > 🌐 **[English README is available here](./README.md)**
 
@@ -38,7 +38,7 @@
 
 ## 📘 段階的セットアップマニュアル (Setup Guide)
 
-本ガイドでは、**CoHive Enterprise Edition (マルチ組織・ガバナンス管理版)** をデプロイし、初期状態から本番運用・エンタープライズ運用へスムーズにステップアップするための手順を解説します。
+本ガイドでは、**CoHive** をデプロイし、初期状態から本番運用へスムーズにステップアップするための手順を解説します。
 
 ### 🗺️ 段階的セットアップのロードマップ
 

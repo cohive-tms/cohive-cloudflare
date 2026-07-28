@@ -1,4 +1,4 @@
-# 💼 CoHive Enterprise Edition
+# 💼 CoHive
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
 
@@ -23,7 +23,7 @@
 
 ## 🛠️ One-Click Deployment
 
-Click the button below to start deploying your Enterprise instance:
+Click the button below to start deploying your instance:
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cohive-tms/cohive-cloudflare)
 
@@ -37,7 +37,7 @@ Click the button below to start deploying your Enterprise instance:
 
 ## 📘 Setup & Deployment Guide
 
-This guide walks you through deploying **CoHive Enterprise Edition** and stepping up from initial trial to full enterprise production.
+This guide walks you through deploying **CoHive** and stepping up from initial trial to full production.
 
 ### 🗺️ Setup Roadmap
 
