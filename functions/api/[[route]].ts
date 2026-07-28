@@ -698,3 +698,16 @@ export const onRequest: PagesFunction<any> = async (context) => {
   // コアのAPIハンドラーを実行
   return coreOnRequest(context);
 };
+
+export default {
+  fetch(request: Request, env: any, ctx: any) {
+    return onRequest({
+      request,
+      env,
+      params: {},
+      waitUntil: ctx?.waitUntil ? ctx.waitUntil.bind(ctx) : () => {},
+      passThroughOnException: () => {},
+      next: () => Promise.resolve(new Response('Not Found', { status: 404 }))
+    } as any);
+  }
+};
