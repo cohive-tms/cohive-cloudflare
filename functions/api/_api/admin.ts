@@ -123,7 +123,8 @@ export async function handleSetupAdmin(request: Request, env: Env): Promise<Resp
     }
 
     const body: any = await request.json();
-    const { email, password, displayName } = body;
+    const { email, password, displayName, language } = body;
+    const adminLang = (language === 'ja' || language === 'en') ? language : 'en';
 
     if (!email || !password || !displayName) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), { status: 400, headers });
@@ -132,20 +133,13 @@ export async function handleSetupAdmin(request: Request, env: Env): Promise<Resp
     const passwordHash = await hashPassword(password);
     const adminId = crypto.randomUUID();
 
-    try {
-      await env.DB.prepare(
-        "INSERT INTO saas_admins (id, email, password_hash, display_name, role, created_at, updated_at) VALUES (?, ?, ?, ?, 'owner', datetime('now'), datetime('now'))"
-      ).bind(adminId, email, passwordHash, displayName).run();
-    } catch (dbErr: any) {
-      if (dbErr?.message?.includes("updated_at")) {
-        await env.DB.prepare("ALTER TABLE saas_admins ADD COLUMN updated_at TEXT").run().catch(() => {});
-        await env.DB.prepare(
-          "INSERT INTO saas_admins (id, email, password_hash, display_name, role, created_at, updated_at) VALUES (?, ?, ?, ?, 'owner', datetime('now'), datetime('now'))"
-        ).bind(adminId, email, passwordHash, displayName).run();
-      } else {
-        throw dbErr;
-      }
-    }
+    // saas_admins に language / updated_at カラムがない場合は自動追加
+    await env.DB.prepare("ALTER TABLE saas_admins ADD COLUMN language TEXT DEFAULT 'en'").run().catch(() => {});
+    await env.DB.prepare("ALTER TABLE saas_admins ADD COLUMN updated_at TEXT").run().catch(() => {});
+
+    await env.DB.prepare(
+      "INSERT INTO saas_admins (id, email, password_hash, display_name, role, language, created_at, updated_at) VALUES (?, ?, ?, ?, 'owner', ?, datetime('now'), datetime('now'))"
+    ).bind(adminId, email, passwordHash, displayName, adminLang).run();
 
     return new Response(JSON.stringify({ success: true, message: "SaaS Admin initialized successfully." }), { status: 201, headers });
   } catch (err: any) {
@@ -199,7 +193,8 @@ export async function handleLoginAdmin(request: Request, env: Env): Promise<Resp
           id: admin.id,
           email: admin.email,
           displayName: admin.display_name,
-          role: admin.role
+          role: admin.role,
+          language: admin.language || 'en'
         }
       }), { status: 200, headers });
     }
@@ -312,7 +307,8 @@ export async function handleVerifyAdminMfa(request: Request, env: Env): Promise<
         id: admin.id,
         email: admin.email,
         displayName: admin.display_name,
-        role: admin.role
+        role: admin.role,
+        language: admin.language || 'en'
       }
     }), { status: 200, headers });
   } catch (err: any) {
@@ -525,7 +521,7 @@ export async function handleGetCurrentAdmin(request: Request, env: Env): Promise
     }
 
     const admin = await env.DB.prepare(
-      "SELECT id, email, display_name, role FROM saas_admins WHERE id = ?"
+      "SELECT id, email, display_name, role, language FROM saas_admins WHERE id = ?"
     ).bind(auth.adminId).first<any>();
 
     if (!admin) {
@@ -574,7 +570,8 @@ export async function handleGetCurrentAdmin(request: Request, env: Env): Promise
         id: admin.id,
         email: admin.email,
         displayName: admin.display_name,
-        role: admin.role
+        role: admin.role,
+        language: admin.language || 'en'
       },
       settings: {
         customPath: customPathSetting?.value || "admin",
@@ -843,6 +840,12 @@ export async function handleUpdateMeAdmin(request: Request, env: Env): Promise<R
       params.push(passwordHash);
     }
 
+    if (body.language !== undefined && (body.language === 'ja' || body.language === 'en')) {
+      await env.DB.prepare("ALTER TABLE saas_admins ADD COLUMN language TEXT DEFAULT 'en'").run().catch(() => {});
+      updates.push("language = ?");
+      params.push(body.language);
+    }
+
     if (updates.length === 0) {
       return new Response(JSON.stringify({ error: "No fields to update" }), { status: 400, headers });
     }
@@ -855,7 +858,7 @@ export async function handleUpdateMeAdmin(request: Request, env: Env): Promise<R
 
     // 更新後のプロフィールを再取得して返す
     const updated = await env.DB.prepare(
-      "SELECT id, email, display_name as displayName, role FROM saas_admins WHERE id = ?"
+      "SELECT id, email, display_name as displayName, role, language FROM saas_admins WHERE id = ?"
     ).bind(auth.adminId).first<any>();
 
     logAudit(env, null, auth.adminId, "admin_update_profile", { email: email?.trim(), displayName: displayName?.trim() }, request).catch(console.error);

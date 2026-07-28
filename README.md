@@ -71,7 +71,7 @@ Immediately after deployment, no platform Super Admin account exists. Accessing 
    Append `/admin` to your generated domain URL in the browser.  
    *(e.g., `https://xxx.pages.dev/admin` or `https://yourdomain.com/admin`)*
 2. **Register First Super Admin**  
-   You will be greeted by the **"CoHive Enterprise Setup"** screen. Enter your Display Name, Email, and Initial Password, then click **"Register First Admin"**.
+   You will be greeted by the **"CoHive Admin Setup"** screen. Enter your Display Name, Email, and Initial Password, then click **"Register First Admin"**.
 3. **Complete Platform Initialization**  
    Upon successful registration, the admin console will load, completing platform initialization and unlocking general user access for workspaces and chat functions.
 
@@ -129,7 +129,7 @@ Configures outgoing email for workspace invitations and notifications.
 
 > ⚠️ **Note**: Enable Cloudflare Zero Trust **only if this instance is strictly for internal company use**. For open or multi-company client access, Zero Trust SSO creates unnecessary double-login barriers.
 
-#### Setup Steps (Strictly Internal Enterprise Usage)
+#### Setup Steps (Strictly Internal Organization Usage)
 
 1. In Cloudflare Dashboard, go to **Zero Trust** > **Access** > **Applications**.
 2. Select **Add an Application** > **Self-hosted**.
