@@ -75,12 +75,15 @@ import {
 } from "./admin";
 import { 
   handleGetPublicSaaSPlans, 
-  handleGetWorkspaceAuditLogs, 
   handleCreateBillingCheckout, 
   handleCreateBillingPortal, 
   getStripeSettings,
   handleGetWorkspaceSubscription
 } from "./saas_extensions";
+import {
+  handleFileUpload,
+  handleAvatarUpload,
+  handleFileDownload
 } from "./files";
 import { handlePushSubscribe } from "./push";
 
@@ -387,6 +390,7 @@ async function handleApiRequests(context: EventContext<Env, any, any>, origin: s
     if (method === "GET") return await handleGetCustomEmojis(request, env, wsId);
     if (method === "POST") return await handleCreateCustomEmoji(request, env, wsId);
   }
+
 
   // 12. File Upload / Download
   if (url.pathname === "/api/files/upload" && method === "POST") {
