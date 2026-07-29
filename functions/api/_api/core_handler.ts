@@ -1,13 +1,13 @@
 import { handleSetupStatus, handleSetupRegister } from "./setup";
 import { verifyJWT, getJwtSecret } from "../_utils/jwt";
 import { INIT_SQL } from "../_utils/schema";
-import { 
   handleLogin, 
   handleChangePassword, 
   handleRefresh, 
   handleLogout, 
   handleVerifyMfa, 
-  handleRegister 
+  handleRegister,
+  handleRecovery
 } from "./auth";
 import { handleGetWorkspaces, handleCreateWorkspace, handleUpdateWorkspace, handleDeleteWorkspace } from "./workspace";
 import { 
@@ -80,11 +80,8 @@ import {
   getStripeSettings,
   handleGetWorkspaceSubscription
 } from "./saas_extensions";
-import {
-  handleFileUpload,
-  handleAvatarUpload,
-  handleFileDownload
 } from "./files";
+import { handlePushSubscribe } from "./push";
 
 export interface Env {
   DB: D1Database;
@@ -123,6 +120,24 @@ async function runMigrations(env: Env) {
       await env.DB.prepare("ALTER TABLE global_announcements ADD COLUMN start_at TEXT").run();
       await env.DB.prepare("ALTER TABLE global_announcements ADD COLUMN end_at TEXT").run();
     }
+  }
+
+  // push_subscriptions テーブルとインデックスの自動マイグレーション
+  try {
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        endpoint TEXT UNIQUE NOT NULL,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `).run();
+    await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id)").run();
+  } catch (e) {
+    console.error("Failed to migrate push_subscriptions table:", e);
   }
 }
 
@@ -192,6 +207,7 @@ async function handleApiRequests(context: EventContext<Env, any, any>, origin: s
   if (url.pathname === "/api/auth/refresh" && method === "POST") return await handleRefresh(request, env);
   if (url.pathname === "/api/auth/logout" && method === "POST") return await handleLogout(request, env);
   if (url.pathname === "/api/auth/change-password" && method === "POST") return await handleChangePassword(request, env);
+  if (url.pathname === "/api/auth/recovery" && method === "POST") return await handleRecovery(request, env);
 
   // 2. SaaS Plans, Announcements & Billing
   if (url.pathname === "/api/plans" && method === "GET") return await handleGetPublicSaaSPlans(request, env);
@@ -258,6 +274,10 @@ async function handleApiRequests(context: EventContext<Env, any, any>, origin: s
   if (matchArchiveNotif && method === "PUT") return await handleArchiveNotification(request, env, matchArchiveNotif[1]);
   const matchReadAllNotif = url.pathname.match(/^\/api\/workspaces\/([^\/]+)\/notifications\/read-all$/);
   if (matchReadAllNotif && method === "PUT") return await handleMarkAllNotificationsAsRead(request, env, matchReadAllNotif[1]);
+
+  if (url.pathname === "/api/push/subscribe" && method === "POST") {
+    return await handlePushSubscribe(request, env);
+  }
 
   // 7. Groups & DM
   const matchGroups = url.pathname.match(/^\/api\/workspaces\/([^\/]+)\/groups$/);

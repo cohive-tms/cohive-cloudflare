@@ -24,7 +24,8 @@ import {
   handleUpdateAdminAnnouncement,
   handlePurgeWorkspaceData,
   handleGetWorkspaceBranding,
-  handleUpdateWorkspaceBranding
+  handleUpdateWorkspaceBranding,
+  handleUpdateAdminLanguage
 } from "./_api/admin";
 import { getSmtpSettings, saveSmtpSettings, deleteSmtpSettings, sendMail } from "./_utils/smtp";
 import {
@@ -105,6 +106,7 @@ async function runSaasMigrations(env: any) {
         role TEXT NOT NULL DEFAULT 'admin',
         mfa_secret TEXT DEFAULT '',
         mfa_enabled INTEGER DEFAULT 0,
+        language TEXT DEFAULT 'ja',
         created_at TEXT NOT NULL,
         updated_at TEXT
       )
@@ -114,6 +116,12 @@ async function runSaasMigrations(env: any) {
       await env.DB.prepare("ALTER TABLE saas_admins ADD COLUMN updated_at TEXT").run();
     } catch (e) {
       // すでに updated_at カラムが存在する場合は無視
+    }
+
+    try {
+      await env.DB.prepare("ALTER TABLE saas_admins ADD COLUMN language TEXT DEFAULT 'ja'").run();
+    } catch (e) {
+      // すでに language カラムが存在する場合は無視
     }
 
     await env.DB.prepare(`
@@ -379,6 +387,10 @@ export const onRequest: PagesFunction<any> = async (context) => {
     }
     if (pathname === "/api/admin/accounts/me" && method === "PUT") {
       return await handleUpdateMeAdmin(request, env);
+    }
+    if (pathname === "/api/admin/profile") {
+      if (method === "PUT") return await handleUpdateAdminLanguage(request, env);
+      if (method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
     }
     if (pathname === "/api/admin/accounts/transfer-ownership" && method === "POST") {
       return await handleTransferOwnership(request, env);
