@@ -1,7 +1,7 @@
 #:schema node_modules/wrangler/config-schema.json
 name = "cohive-cloudflare"
 main = "functions/api/[[route]].ts"
-compatibility_date = "2026-07-02"
+compatibility_date = "2026-07-01"
 
 [assets]
 directory = "./dist"
