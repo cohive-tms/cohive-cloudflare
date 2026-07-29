@@ -66,7 +66,8 @@ import {
 import { 
   handleSearchWorkspace, 
   handleGetActivities, 
-  handleGetCustomEmojis 
+  handleGetCustomEmojis,
+  handleCreateCustomEmoji
 } from "./features";
 import { 
   handleGetActiveAnnouncements,
@@ -138,6 +139,26 @@ async function runMigrations(env: Env) {
     await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id)").run();
   } catch (e) {
     console.error("Failed to migrate push_subscriptions table:", e);
+  }
+
+  // custom_emojis テーブルとインデックスの自動マイグレーション
+  try {
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS custom_emojis (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        code TEXT NOT NULL,
+        object_key TEXT NOT NULL,
+        creator_id TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+        FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE (workspace_id, code)
+      )
+    `).run();
+    await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_custom_emojis_workspace_id ON custom_emojis(workspace_id)").run();
+  } catch (e) {
+    console.error("Failed to migrate custom_emojis table:", e);
   }
 }
 
@@ -360,7 +381,12 @@ async function handleApiRequests(context: EventContext<Env, any, any>, origin: s
   const matchSearch = url.pathname.match(/^\/api\/workspaces\/([^\/]+)\/search$/);
   if (matchSearch && method === "GET") return await handleSearchWorkspace(request, env, matchSearch[1]);
   if (url.pathname === "/api/activities" && method === "GET") return await handleGetActivities(request, env);
-  if (matchEmojis && method === "GET") return await handleGetCustomEmojis(request, env, matchEmojis[1]);
+  const matchEmojis = url.pathname.match(/^\/api\/workspaces\/([^\/]+)\/emojis$/);
+  if (matchEmojis) {
+    const wsId = matchEmojis[1];
+    if (method === "GET") return await handleGetCustomEmojis(request, env, wsId);
+    if (method === "POST") return await handleCreateCustomEmoji(request, env, wsId);
+  }
 
   // 12. File Upload / Download
   if (url.pathname === "/api/files/upload" && method === "POST") {
