@@ -15,7 +15,7 @@
 * 📊 **Audit Log Management**: Centralized tracking of workspace actions and user access.  
   * ※ Viewing audit logs for the last 7 days is available to all users out of the box.  
   * 💖 **[Sponsor Feature - Planned]**: **Retention and viewing of audit logs older than 7 days** is planned as an upcoming GitHub Sponsor benefit (currently under verification).
-* 🌐 **Hybrid Domain Routing**: Supports path-based routing (`/w/tenant`) by default and automatically upgrades to wildcard subdomains (`tenant.yourdomain.com`).
+* 🌐 **Custom Domain Support**: Easily bind your custom domain to your Cloudflare Pages deployment.
 * 🔑 **Physical Key Separation Security**: Protects against D1 database leakage using the `ENCRYPTION_SECRET` environment variable to isolate sensitive data (SMTP credentials, etc.) from storage.
 * 💳 **Stripe Billing Integration (In Progress / Upcoming Feature)**: Automated subscription plan management via Stripe Checkout, webhook synchronization, and customer portal integration (currently under active development and verification).
 
@@ -57,10 +57,11 @@ This guide walks you through deploying **CoHive** and stepping up from initial t
 
 ```mermaid
 flowchart TD
-    Step1["🚀 STEP 1: Fork & Pages Deploy<br/>(Initial launch & instant testing)"] --> Step2["🔑 STEP 2: Configure ENCRYPTION_SECRET<br/>(Physical key-data separation against DB leaks)"]
-    Step2 --> Step3["🌐 STEP 3: Custom Domain & Subdomains<br/>(URL setup & auto subdomain isolation)"]
-    Step3 --> Step4["✉️ STEP 4: SMTP Email Config<br/>(Invitation emails & notifications)"]
-    Step4 --> Option["🔒 OPTION: Cloudflare Zero Trust<br/>(Optional internal SSO protection)"]
+    Step1["🚀 STEP 1: Fork & Pages Deploy<br/>(Initial launch & instant testing)"] --> Step2["👑 STEP 2: Initial Admin Setup<br/>(Register first Super Admin via /admin)"]
+    Step2 --> Step3["🔑 STEP 3: Configure ENCRYPTION_SECRET<br/>(Physical key-data separation against DB leaks)"]
+    Step3 --> Step4["🌐 STEP 4: Custom Domain & Subdomains<br/>(URL setup & auto subdomain isolation)"]
+    Step4 --> Step5["✉️ STEP 5: SMTP Email Config<br/>(Invitation emails & notifications)"]
+    Step5 --> Option["🔒 OPTION: Cloudflare Zero Trust<br/>(Optional internal SSO protection)"]
 ```
 
 ---
@@ -73,7 +74,7 @@ flowchart TD
    Pages Functions, D1 database (`cohive_db`), and R2 storage bucket are created automatically.
 3. **Instant Access & Verification**  
    Access your generated default URL (e.g., `https://xxx.pages.dev`).
-   * **Behavior**: Without custom domain configuration, path-based multi-tenancy (`https://xxx.pages.dev/w/tenant-a/login`) works **out of the box with zero manual config**.
+   * **Behavior**: Without custom domain configuration, the application works out of the box using your default pages.dev domain.
 
 ---
 
@@ -108,24 +109,22 @@ To **completely eliminate the risk of decrypted credentials in the event of a fu
 
 ---
 
-### 🌐 STEP 3: Custom Domain & Wildcard Subdomains (Recommended for Production)
+### 🌐 STEP 4: Custom Domain Configuration (Recommended for Production)
 
-To prevent password manager confusion and optimize branding, bind a custom domain.
+To optimize branding and use your own domain, bind a custom domain.
 
-1. **Set Wildcard DNS in Cloudflare**
-   * In your Cloudflare DNS manager for your domain (e.g., `yourdomain.com`), add a CNAME record:
+1. **Set CNAME Record in Cloudflare**
+   * In your Cloudflare DNS manager for your domain (e.g., `yourdomain.com` or `cohive.yourdomain.com`), add a CNAME record:
      * **Type**: `CNAME`
-     * **Name**: `*` (Target all subdomains)
+     * **Name**: `@` (or subdomain like `cohive`)
      * **Target**: `xxx.pages.dev` (Your URL from STEP 1)
      * **Proxy status**: 🟧 Proxied
 2. **Bind Custom Domain in Pages**
-   * In Cloudflare Pages Custom Domains, add `yourdomain.com` and `*.yourdomain.com`.
-3. **Automatic Subdomain Upgrade**
-   * Tenant "Company A" is now accessible at `https://tenant-a.yourdomain.com` with clean domain-isolated login and session security.
+   * In Cloudflare Pages Custom Domains, add your custom domain (e.g., `cohive.yourdomain.com`).
 
 ---
 
-### ✉️ STEP 4: SMTP Email Configuration
+### ✉️ STEP 5: SMTP Email Configuration
 
 Configures outgoing email for workspace invitations and notifications.
 
@@ -133,7 +132,7 @@ Configures outgoing email for workspace invitations and notifications.
 2. **Configure SMTP**: Under **System Settings** > **Email Settings**, enter:
    * **SMTP Host**: (e.g., `smtp.sendgrid.net` or your mail server)
    * **Port**: `587` or `465`
-   * **Sender Email**: `noreply@yourdomain.com` (from domain configured in STEP 3)
+   * **Sender Email**: `noreply@yourdomain.com` (from domain configured in STEP 4)
    * **Credentials**: Username & Password / API Key
 3. **Verify**: Send a test email to ensure invitation emails arrive properly.
 
