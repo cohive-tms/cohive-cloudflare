@@ -80,6 +80,11 @@ import {
   getStripeSettings,
   handleGetWorkspaceSubscription
 } from "./saas_extensions";
+import {
+  handleFileUpload,
+  handleAvatarUpload,
+  handleFileDownload
+} from "./files";
 
 export interface Env {
   DB: D1Database;
@@ -335,8 +340,20 @@ async function handleApiRequests(context: EventContext<Env, any, any>, origin: s
   const matchSearch = url.pathname.match(/^\/api\/workspaces\/([^\/]+)\/search$/);
   if (matchSearch && method === "GET") return await handleSearchWorkspace(request, env, matchSearch[1]);
   if (url.pathname === "/api/activities" && method === "GET") return await handleGetActivities(request, env);
-  const matchEmojis = url.pathname.match(/^\/api\/workspaces\/([^\/]+)\/emojis$/);
   if (matchEmojis && method === "GET") return await handleGetCustomEmojis(request, env, matchEmojis[1]);
+
+  // 12. File Upload / Download
+  if (url.pathname === "/api/files/upload" && method === "POST") {
+    return await handleFileUpload(request, env);
+  }
+  if (url.pathname === "/api/avatars/upload" && method === "POST") {
+    return await handleAvatarUpload(request, env);
+  }
+  const matchFileDownload = url.pathname.match(/^\/api\/files\/download\/(.+)$/);
+  if (matchFileDownload) {
+    const objectKey = decodeURIComponent(matchFileDownload[1]);
+    return await handleFileDownload(request, env, objectKey);
+  }
 
   return new Response(JSON.stringify({ message: "Core route handled" }), {
     status: 200,
