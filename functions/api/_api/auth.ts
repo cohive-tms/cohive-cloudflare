@@ -667,3 +667,151 @@ export async function handleRegister(request: Request, env: Env): Promise<Respon
     });
   }
 }
+
+/**
+ * リカバリーコードによるパスワード再設定と自動ログイン処理
+ * POST /api/auth/recovery
+ */
+export async function handleRecovery(request: Request, env: Env): Promise<Response> {
+  const origin = request.headers.get("Origin") || "*";
+  const headers: any = {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
+  };
+
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers });
+  }
+
+  try {
+    const body: any = await request.json();
+    const { email, recoveryCode, newPassword } = body;
+
+    if (!email || !recoveryCode || !newPassword) {
+      return new Response(JSON.stringify({ error: "Email, recovery code, and new password are required" }), {
+        status: 400,
+        headers,
+      });
+    }
+
+    if (newPassword.length < 8) {
+      return new Response(JSON.stringify({ error: "Password must be at least 8 characters long" }), {
+        status: 400,
+        headers,
+      });
+    }
+
+    // ユーザー情報の取得
+    const userResult = await env.DB.prepare(
+      "SELECT * FROM users WHERE email = ?"
+    ).bind(email).first<any>();
+
+    if (!userResult) {
+      return new Response(JSON.stringify({ error: "Invalid email or recovery code" }), {
+        status: 400,
+        headers,
+      });
+    }
+
+    if (userResult.status === 'suspended') {
+      return new Response(JSON.stringify({ error: "このアカウントは一時停止（BAN）されています。システム管理者にお問い合わせください。" }), {
+        status: 403,
+        headers,
+      });
+    }
+
+    // リカバリーコードの検証
+    const isRecoveryValid = await verifyPassword(recoveryCode, userResult.recovery_code_hash);
+    if (!isRecoveryValid) {
+      return new Response(JSON.stringify({ error: "Invalid email or recovery code" }), {
+        status: 400,
+        headers,
+      });
+    }
+
+    // 新しいパスワードのハッシュ化、新しいリカバリーコードの生成
+    const passwordHash = await hashPassword(newPassword);
+    const newRecoveryCode = generateRecoveryCode();
+    const newRecoveryCodeHash = await hashPassword(newRecoveryCode);
+
+    // ユーザーレコードの更新
+    await env.DB.prepare(
+      "UPDATE users SET password_hash = ?, recovery_code_hash = ?, updated_at = datetime('now') WHERE id = ?"
+    ).bind(passwordHash, newRecoveryCodeHash, userResult.id).run();
+
+    // ログインセッションの作成
+    let workspaceId = "";
+    let workspaceName = "";
+    let defaultChannelId = "";
+
+    const memberResult = await env.DB.prepare(
+      "SELECT workspace_id FROM workspace_members WHERE user_id = ? ORDER BY created_at ASC LIMIT 1"
+    ).bind(userResult.id).first<{ workspace_id: string }>();
+
+    if (memberResult) {
+      workspaceId = memberResult.workspace_id;
+      const wsResult = await env.DB.prepare(
+        "SELECT name FROM workspaces WHERE id = ?"
+      ).bind(workspaceId).first<{ name: string }>();
+      workspaceName = wsResult?.name || "マイワークスペース";
+
+      const channelResult = await env.DB.prepare(
+        "SELECT id FROM channels WHERE workspace_id = ? ORDER BY created_at ASC LIMIT 1"
+      ).bind(workspaceId).first<{ id: string }>();
+      defaultChannelId = channelResult?.id || "";
+    }
+
+    const secret = getJwtSecret(env);
+    const accessToken = await signJWT(
+      { userId: userResult.id, type: "access", exp: Math.floor(Date.now() / 1000) + 900 },
+      secret
+    );
+
+    const newRefreshToken = await signJWT(
+      { userId: userResult.id, type: "refresh", exp: Math.floor(Date.now() / 1000) + 30 * 24 * 3600 },
+      secret
+    );
+
+    const cookieValue = serializeCookie(
+      "refresh_token",
+      newRefreshToken,
+      getCookieOptions(request, env, 30 * 24 * 3600)
+    );
+
+    const responseHeaders = new Headers(headers);
+    responseHeaders.append("Set-Cookie", cookieValue);
+
+    // 監査ログ出力
+    logAudit(env, workspaceId || null, userResult.id, "password_recovery_success", { email }, request).catch(console.error);
+
+    return new Response(JSON.stringify({
+      success: true,
+      message: "Password reset and logged in successfully",
+      data: {
+        id: userResult.id,
+        displayName: userResult.display_name,
+        email: userResult.email,
+        avatarUrl: userResult.avatar_url || null,
+        workspaceId,
+        workspaceName,
+        defaultChannelId,
+        token: accessToken,
+        language: userResult.language || 'ja',
+        recoveryCode: newRecoveryCode
+      }
+    }), {
+      status: 200,
+      headers: responseHeaders,
+    });
+
+  } catch (error: any) {
+    console.error("Recovery failed:", error);
+    return new Response(JSON.stringify({ error: error.message || "Internal Server Error" }), {
+      status: 500,
+      headers,
+    });
+  }
+}

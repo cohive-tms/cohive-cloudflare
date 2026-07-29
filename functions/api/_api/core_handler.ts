@@ -1,13 +1,14 @@
 import { handleSetupStatus, handleSetupRegister } from "./setup";
 import { verifyJWT, getJwtSecret } from "../_utils/jwt";
 import { INIT_SQL } from "../_utils/schema";
-import { 
+import {
   handleLogin, 
   handleChangePassword, 
   handleRefresh, 
   handleLogout, 
   handleVerifyMfa, 
-  handleRegister 
+  handleRegister,
+  handleRecovery
 } from "./auth";
 import { handleGetWorkspaces, handleCreateWorkspace, handleUpdateWorkspace, handleDeleteWorkspace } from "./workspace";
 import { 
@@ -66,7 +67,8 @@ import {
 import { 
   handleSearchWorkspace, 
   handleGetActivities, 
-  handleGetCustomEmojis 
+  handleGetCustomEmojis,
+  handleCreateCustomEmoji
 } from "./features";
 import { 
   handleGetActiveAnnouncements,
@@ -74,12 +76,17 @@ import {
 } from "./admin";
 import { 
   handleGetPublicSaaSPlans, 
-  handleGetWorkspaceAuditLogs, 
   handleCreateBillingCheckout, 
   handleCreateBillingPortal, 
   getStripeSettings,
   handleGetWorkspaceSubscription
 } from "./saas_extensions";
+import {
+  handleFileUpload,
+  handleAvatarUpload,
+  handleFileDownload
+} from "./files";
+import { handlePushSubscribe } from "./push";
 
 export interface Env {
   DB: D1Database;
@@ -111,13 +118,44 @@ async function runMigrations(env: Env) {
     }
   }
 
+
+
+  // push_subscriptions テーブルとインデックスの自動マイグレーション
   try {
-    await env.DB.prepare("SELECT start_at FROM global_announcements LIMIT 1").all();
-  } catch (colErr: any) {
-    if (colErr.message && (colErr.message.includes("no such column") || colErr.message.includes("has no column"))) {
-      await env.DB.prepare("ALTER TABLE global_announcements ADD COLUMN start_at TEXT").run();
-      await env.DB.prepare("ALTER TABLE global_announcements ADD COLUMN end_at TEXT").run();
-    }
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        endpoint TEXT UNIQUE NOT NULL,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `).run();
+    await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(user_id)").run();
+  } catch (e) {
+    console.error("Failed to migrate push_subscriptions table:", e);
+  }
+
+  // custom_emojis テーブルとインデックスの自動マイグレーション
+  try {
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS custom_emojis (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        code TEXT NOT NULL,
+        object_key TEXT NOT NULL,
+        creator_id TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+        FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE (workspace_id, code)
+      )
+    `).run();
+    await env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_custom_emojis_workspace_id ON custom_emojis(workspace_id)").run();
+  } catch (e) {
+    console.error("Failed to migrate custom_emojis table:", e);
   }
 }
 
@@ -187,6 +225,7 @@ async function handleApiRequests(context: EventContext<Env, any, any>, origin: s
   if (url.pathname === "/api/auth/refresh" && method === "POST") return await handleRefresh(request, env);
   if (url.pathname === "/api/auth/logout" && method === "POST") return await handleLogout(request, env);
   if (url.pathname === "/api/auth/change-password" && method === "POST") return await handleChangePassword(request, env);
+  if (url.pathname === "/api/auth/recovery" && method === "POST") return await handleRecovery(request, env);
 
   // 2. SaaS Plans, Announcements & Billing
   if (url.pathname === "/api/plans" && method === "GET") return await handleGetPublicSaaSPlans(request, env);
@@ -253,6 +292,10 @@ async function handleApiRequests(context: EventContext<Env, any, any>, origin: s
   if (matchArchiveNotif && method === "PUT") return await handleArchiveNotification(request, env, matchArchiveNotif[1]);
   const matchReadAllNotif = url.pathname.match(/^\/api\/workspaces\/([^\/]+)\/notifications\/read-all$/);
   if (matchReadAllNotif && method === "PUT") return await handleMarkAllNotificationsAsRead(request, env, matchReadAllNotif[1]);
+
+  if (url.pathname === "/api/push/subscribe" && method === "POST") {
+    return await handlePushSubscribe(request, env);
+  }
 
   // 7. Groups & DM
   const matchGroups = url.pathname.match(/^\/api\/workspaces\/([^\/]+)\/groups$/);
@@ -336,7 +379,25 @@ async function handleApiRequests(context: EventContext<Env, any, any>, origin: s
   if (matchSearch && method === "GET") return await handleSearchWorkspace(request, env, matchSearch[1]);
   if (url.pathname === "/api/activities" && method === "GET") return await handleGetActivities(request, env);
   const matchEmojis = url.pathname.match(/^\/api\/workspaces\/([^\/]+)\/emojis$/);
-  if (matchEmojis && method === "GET") return await handleGetCustomEmojis(request, env, matchEmojis[1]);
+  if (matchEmojis) {
+    const wsId = matchEmojis[1];
+    if (method === "GET") return await handleGetCustomEmojis(request, env, wsId);
+    if (method === "POST") return await handleCreateCustomEmoji(request, env, wsId);
+  }
+
+
+  // 12. File Upload / Download
+  if (url.pathname === "/api/files/upload" && method === "POST") {
+    return await handleFileUpload(request, env);
+  }
+  if (url.pathname === "/api/avatars/upload" && method === "POST") {
+    return await handleAvatarUpload(request, env);
+  }
+  const matchFileDownload = url.pathname.match(/^\/api\/files\/download\/(.+)$/);
+  if (matchFileDownload) {
+    const objectKey = decodeURIComponent(matchFileDownload[1]);
+    return await handleFileDownload(request, env, objectKey);
+  }
 
   return new Response(JSON.stringify({ message: "Core route handled" }), {
     status: 200,

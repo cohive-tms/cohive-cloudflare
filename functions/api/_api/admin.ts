@@ -1337,3 +1337,35 @@ export async function handleUpdateWorkspaceBranding(request: Request, env: Env, 
   }
 }
 
+// 29. SaaS管理者言語設定の更新
+export async function handleUpdateAdminLanguage(request: Request, env: Env): Promise<Response> {
+  try {
+    const isAllowedIp = await checkIpRestriction(request, env);
+    if (!isAllowedIp) {
+      return new Response(JSON.stringify({ error: "Access denied from this IP address" }), { status: 403, headers });
+    }
+
+    const auth = await verifyAdminAuth(request, env);
+    if (!auth) {
+      return new Response(JSON.stringify({ error: "Admin unauthorized" }), { status: 401, headers });
+    }
+
+    const body: any = await request.json();
+    const { language } = body;
+
+    if (!language) {
+      return new Response(JSON.stringify({ error: "Language is required" }), { status: 400, headers });
+    }
+
+    await env.DB.prepare(
+      "UPDATE saas_admins SET language = ?, updated_at = datetime('now') WHERE id = ?"
+    ).bind(language, auth.adminId).run();
+
+    logAudit(env, null, auth.adminId, "admin_language_update", { language }, request).catch(console.error);
+
+    return new Response(JSON.stringify({ success: true }), { status: 200, headers });
+  } catch (err: any) {
+    return new Response(JSON.stringify({ error: err.message || "Internal Server Error" }), { status: 500, headers });
+  }
+}
+
