@@ -164,10 +164,19 @@ async function runSaasMigrations(env: any) {
         content TEXT NOT NULL,
         type TEXT DEFAULT 'info',
         is_active INTEGER DEFAULT 1,
+        start_at TEXT,
+        end_at TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT
       )
     `).run();
+
+    try {
+      await env.DB.prepare("ALTER TABLE global_announcements ADD COLUMN start_at TEXT").run();
+    } catch (e) {}
+    try {
+      await env.DB.prepare("ALTER TABLE global_announcements ADD COLUMN end_at TEXT").run();
+    } catch (e) {}
 
     await env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS workspace_brandings (

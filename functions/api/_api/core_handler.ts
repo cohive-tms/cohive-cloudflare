@@ -117,14 +117,7 @@ async function runMigrations(env: Env) {
     }
   }
 
-  try {
-    await env.DB.prepare("SELECT start_at FROM global_announcements LIMIT 1").all();
-  } catch (colErr: any) {
-    if (colErr.message && (colErr.message.includes("no such column") || colErr.message.includes("has no column"))) {
-      await env.DB.prepare("ALTER TABLE global_announcements ADD COLUMN start_at TEXT").run();
-      await env.DB.prepare("ALTER TABLE global_announcements ADD COLUMN end_at TEXT").run();
-    }
-  }
+
 
   // push_subscriptions テーブルとインデックスの自動マイグレーション
   try {
