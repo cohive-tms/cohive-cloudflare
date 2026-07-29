@@ -22,7 +22,6 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS workspaces (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
-    subdomain TEXT UNIQUE,
     custom_statuses TEXT DEFAULT 'todo,in_progress,done',
     document TEXT DEFAULT '',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
