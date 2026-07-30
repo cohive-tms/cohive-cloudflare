@@ -195,7 +195,18 @@ export async function handleLoginAdmin(request: Request, env: Env): Promise<Resp
 
     // ログイン失敗時の回数カウント＆ロック処理ヘルパー (管理者用: 3回失敗でロック)
     const handleLoginFailure = async () => {
-      const maxAttempts = 3;
+      let maxAttempts = 3;
+      try {
+        const maxAttemptsSetting = await env.DB.prepare(
+          "SELECT value FROM system_settings WHERE key = ?"
+        ).bind("admin_login_max_attempts").first<{ value: string }>();
+        if (maxAttemptsSetting?.value) {
+          maxAttempts = parseInt(maxAttemptsSetting.value, 10);
+        }
+      } catch (err) {
+        console.error("Failed to load admin_login_max_attempts setting:", err);
+      }
+      
       const lockoutMinutes = 15;
       const now = new Date();
 
@@ -499,7 +510,7 @@ export async function handleUpdateAdminSettings(request: Request, env: Env): Pro
     }
 
     const body: any = await request.json();
-    const { customPath, allowedIps, displayName, stripeEnabled, stripeSettings, defaultSaasPlan, auditLogRetentionDays } = body;
+    const { customPath, allowedIps, displayName, stripeEnabled, stripeSettings, defaultSaasPlan, auditLogRetentionDays, userLoginMaxAttempts, adminLoginMaxAttempts } = body;
 
     const batch = [];
 
@@ -559,11 +570,23 @@ export async function handleUpdateAdminSettings(request: Request, env: Env): Pro
       ).bind(String(auditLogRetentionDays)));
     }
 
+    if (userLoginMaxAttempts !== undefined) {
+      batch.push(env.DB.prepare(
+        "INSERT OR REPLACE INTO system_settings (key, value, updated_at) VALUES ('user_login_max_attempts', ?, datetime('now'))"
+      ).bind(String(userLoginMaxAttempts)));
+    }
+
+    if (adminLoginMaxAttempts !== undefined) {
+      batch.push(env.DB.prepare(
+        "INSERT OR REPLACE INTO system_settings (key, value, updated_at) VALUES ('admin_login_max_attempts', ?, datetime('now'))"
+      ).bind(String(adminLoginMaxAttempts)));
+    }
+
     if (batch.length > 0) {
       await env.DB.batch(batch);
     }
 
-    logAudit(env, null, auth.adminId, "admin_update_settings", { customPath, allowedIps, stripeEnabled, defaultSaasPlan, auditLogRetentionDays }, request).catch(console.error);
+    logAudit(env, null, auth.adminId, "admin_update_settings", { customPath, allowedIps, stripeEnabled, defaultSaasPlan, auditLogRetentionDays, userLoginMaxAttempts, adminLoginMaxAttempts }, request).catch(console.error);
 
     return new Response(JSON.stringify({ success: true }), { status: 200, headers });
   } catch (err: any) {
@@ -613,6 +636,14 @@ export async function handleGetCurrentAdmin(request: Request, env: Env): Promise
       "SELECT value FROM system_settings WHERE key = ?"
     ).bind("saas_audit_log_retention_days").first<{ value: string }>();
 
+    const userLoginMaxAttemptsSetting = await env.DB.prepare(
+      "SELECT value FROM system_settings WHERE key = ?"
+    ).bind("user_login_max_attempts").first<{ value: string }>();
+
+    const adminLoginMaxAttemptsSetting = await env.DB.prepare(
+      "SELECT value FROM system_settings WHERE key = ?"
+    ).bind("admin_login_max_attempts").first<{ value: string }>();
+
     const stripe = await getStripeSettings(env);
     
     const maskKey = (key: string) => {
@@ -644,7 +675,9 @@ export async function handleGetCurrentAdmin(request: Request, env: Env): Promise
         defaultSaasPlan: defaultSaasPlanSetting?.value || "free",
         stripeEnabled: stripeEnabledSetting?.value === "1",
         stripeSettings: maskedStripeSettings,
-        auditLogRetentionDays: auditLogRetentionDaysSetting ? parseInt(auditLogRetentionDaysSetting.value, 10) : 90
+        auditLogRetentionDays: auditLogRetentionDaysSetting ? parseInt(auditLogRetentionDaysSetting.value, 10) : 90,
+        userLoginMaxAttempts: userLoginMaxAttemptsSetting ? parseInt(userLoginMaxAttemptsSetting.value, 10) : 5,
+        adminLoginMaxAttempts: adminLoginMaxAttemptsSetting ? parseInt(adminLoginMaxAttemptsSetting.value, 10) : 3
       },
       clientIp,
       isAllowedIp

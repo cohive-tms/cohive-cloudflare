@@ -57,7 +57,18 @@ export async function handleLogin(request: Request, env: Env): Promise<Response>
 
     // ログイン失敗時の回数カウント＆ロック処理ヘルパー
     const handleLoginFailure = async () => {
-      const maxAttempts = 5;
+      let maxAttempts = 5;
+      try {
+        const maxAttemptsSetting = await env.DB.prepare(
+          "SELECT value FROM system_settings WHERE key = ?"
+        ).bind("user_login_max_attempts").first<{ value: string }>();
+        if (maxAttemptsSetting?.value) {
+          maxAttempts = parseInt(maxAttemptsSetting.value, 10);
+        }
+      } catch (err) {
+        console.error("Failed to load user_login_max_attempts setting:", err);
+      }
+      
       const lockoutMinutes = 15;
       const now = new Date();
 
