@@ -38,7 +38,8 @@ import {
   handleCreateBillingCheckout,
   handleCreateBillingPortal,
   handleStripeWebhook,
-  handleGetPublicSaaSPlans
+  handleGetPublicSaaSPlans,
+  handleGetSystemLimits
 } from "./_api/saas_extensions";
 
 let migrationsRun = false;
@@ -477,6 +478,10 @@ export const onRequest: PagesFunction<any> = async (context) => {
     // ----------------------------------------------------
     if (pathname === "/api/plans" && method === "GET") {
       return await handleGetPublicSaaSPlans(request, env);
+    }
+
+    if (pathname === "/api/system/limits" && (method === "GET" || method === "OPTIONS")) {
+      return await handleGetSystemLimits(request, env);
     }
 
     if (pathname.startsWith("/api/workspaces/") && pathname.includes("/billing/")) {

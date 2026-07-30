@@ -837,3 +837,44 @@ export async function handleGetWorkspaceSubscription(request: Request, env: Env,
   }
 }
 
+// システム全体のデフォルト制限値を取得する API ハンドラー
+export async function handleGetSystemLimits(request: Request, env: Env): Promise<Response> {
+  const systemHeaders = {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  };
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: systemHeaders });
+
+  try {
+    // デフォルトプランを取得
+    const defaultPlanSetting = await env.DB.prepare(
+      "SELECT value FROM system_settings WHERE key = ?"
+    ).bind("default_saas_plan").first<{ value: string }>();
+    const defaultPlan = defaultPlanSetting?.value || "free";
+
+    // プランの表示名を取得
+    const planDetail = await env.DB.prepare(
+      "SELECT name FROM saas_plans WHERE id = ?"
+    ).bind(defaultPlan).first<{ name: string }>();
+    const planName = planDetail?.name || "無料プラン";
+
+    // デフォルトのワークスペース作成上限数を取得
+    const limitSetting = await env.DB.prepare(
+      "SELECT value FROM system_settings WHERE key = ?"
+    ).bind("default_workspace_limit").first<{ value: string }>();
+    const workspaceLimit = limitSetting ? parseInt(limitSetting.value, 10) : 3;
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      plan: defaultPlan,
+      planName,
+      workspaceLimit
+    }), { status: 200, headers: systemHeaders });
+  } catch (err: any) {
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: systemHeaders });
+  }
+}
+
+

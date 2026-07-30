@@ -129,6 +129,27 @@ const AdminUpdateBanner: React.FC = () => {
 };
 
 export default function App() {
+  const [workspaceLimit, setWorkspaceLimit] = useState<number>(3);
+  const [defaultPlanName, setDefaultPlanName] = useState<string>('無料プラン');
+
+  useEffect(() => {
+    const fetchSystemLimits = async () => {
+      try {
+        const res = await fetch('/api/system/limits');
+        if (res.ok) {
+          const data = await res.json() as any;
+          if (data.success) {
+            setWorkspaceLimit(data.workspaceLimit);
+            setDefaultPlanName(data.planName);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch system limits:", err);
+      }
+    };
+    fetchSystemLimits();
+  }, []);
+
   const [isAdminPortalMode, setIsAdminPortalMode] = useState<boolean | null>(null);
   const [currentAdminPath, setCurrentAdminPath] = useState<string>('');
   const [adminSetupRequired, setAdminSetupRequired] = useState<boolean>(false);
@@ -356,10 +377,11 @@ export default function App() {
       </div>
     ),
     checkWorkspaceLimit: (workspaceCount) => {
-      if (workspaceCount >= 3) {
+      if (workspaceCount >= workspaceLimit) {
         return {
           limitReached: true,
-          message: '無料プランの制限に達しました。作成可能なワークスペースは最大3つまでです。'
+          message: `${defaultPlanName}の制限に達しました。作成可能なワークスペースは最大${workspaceLimit}つまでです。`,
+          limitValue: workspaceLimit
         };
       }
       return null;
