@@ -264,3 +264,4 @@ CREATE TABLE IF NOT EXISTS login_attempts (
     lockout_until TEXT,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
+`;
