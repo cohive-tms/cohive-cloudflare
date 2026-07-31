@@ -25,6 +25,72 @@ export async function handleLogin(request: Request, env: Env): Promise<Response>
       });
     }
 
+    // 1. IPアドレスベースのレート制限 (第一関門)
+    const ip = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
+    if (env.RATE_LIMITER) {
+      const { success } = await env.RATE_LIMITER.limit({ key: `login-ip-${ip}` });
+      if (!success) {
+        return new Response(JSON.stringify({ error: "ログイン試行回数が多すぎます。しばらく時間をおいてから再度お試しください。" }), {
+          status: 429,
+          headers,
+        });
+      }
+    }
+
+    // 2. アカウント単位のロック状態チェック (第二関門)
+    const attempt = await env.DB.prepare(
+      "SELECT attempts, lockout_until FROM login_attempts WHERE email = ?"
+    ).bind(email).first<{ attempts: number; lockout_until: string | null }>();
+
+    if (attempt && attempt.lockout_until) {
+      const lockoutTime = new Date(attempt.lockout_until).getTime();
+      if (lockoutTime > Date.now()) {
+        const waitMinutes = Math.ceil((lockoutTime - Date.now()) / (1000 * 60));
+        return new Response(JSON.stringify({ 
+          error: `セキュリティのためアカウントが一時的にロックされています。解除まであと ${waitMinutes} 分お待ちください。` 
+        }), {
+          status: 423,
+          headers,
+        });
+      }
+    }
+
+    // ログイン失敗時の回数カウント＆ロック処理ヘルパー
+    const handleLoginFailure = async () => {
+      let maxAttempts = 5;
+      try {
+        const maxAttemptsSetting = await env.DB.prepare(
+          "SELECT value FROM system_settings WHERE key = ?"
+        ).bind("user_login_max_attempts").first<{ value: string }>();
+        if (maxAttemptsSetting?.value) {
+          maxAttempts = parseInt(maxAttemptsSetting.value, 10);
+        }
+      } catch (err) {
+        console.error("Failed to load user_login_max_attempts setting:", err);
+      }
+      
+      const lockoutMinutes = 15;
+      const now = new Date();
+
+      if (!attempt) {
+        await env.DB.prepare(
+          "INSERT INTO login_attempts (email, attempts, updated_at) VALUES (?, 1, datetime('now'))"
+        ).bind(email).run().catch(console.error);
+      } else {
+        const nextAttempts = attempt.attempts + 1;
+        if (nextAttempts >= maxAttempts) {
+          const lockoutUntil = new Date(now.getTime() + lockoutMinutes * 60 * 1000).toISOString();
+          await env.DB.prepare(
+            "UPDATE login_attempts SET attempts = ?, lockout_until = ?, updated_at = datetime('now') WHERE email = ?"
+          ).bind(nextAttempts, lockoutUntil, email).run().catch(console.error);
+        } else {
+          await env.DB.prepare(
+            "UPDATE login_attempts SET attempts = ?, updated_at = datetime('now') WHERE email = ?"
+          ).bind(nextAttempts, email).run().catch(console.error);
+        }
+      }
+    };
+
     const userResult = await env.DB.prepare(
       "SELECT * FROM users WHERE email = ?"
     ).bind(email).first<{
@@ -37,6 +103,7 @@ export async function handleLogin(request: Request, env: Env): Promise<Response>
     }>();
 
     if (!userResult) {
+      await handleLoginFailure();
       return new Response(JSON.stringify({ error: "Invalid email or password" }), {
         status: 401,
         headers,
@@ -52,11 +119,15 @@ export async function handleLogin(request: Request, env: Env): Promise<Response>
 
     const isPasswordValid = await verifyPassword(password, userResult.password_hash);
     if (!isPasswordValid) {
+      await handleLoginFailure();
       return new Response(JSON.stringify({ error: "Invalid email or password" }), {
         status: 401,
         headers,
       });
     }
+
+    // ログイン成功時は、ログイン試行のカウントをクリア
+    await env.DB.prepare("DELETE FROM login_attempts WHERE email = ?").bind(email).run().catch(console.error);
 
     if (userResult.status === 'pending') {
       await env.DB.prepare(

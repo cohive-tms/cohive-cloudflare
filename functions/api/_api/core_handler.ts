@@ -157,6 +157,20 @@ async function runMigrations(env: Env) {
   } catch (e) {
     console.error("Failed to migrate custom_emojis table:", e);
   }
+
+  // login_attempts テーブルの自動マイグレーション
+  try {
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS login_attempts (
+        email TEXT PRIMARY KEY,
+        attempts INTEGER NOT NULL DEFAULT 1,
+        lockout_until TEXT,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run();
+  } catch (e) {
+    console.error("Failed to migrate login_attempts table:", e);
+  }
 }
 
 async function ensureDatabaseInitialized(env: Env) {

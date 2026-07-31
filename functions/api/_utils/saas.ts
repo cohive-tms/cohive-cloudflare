@@ -23,50 +23,30 @@ export interface WorkspaceLimit {
   forbiddenExtensions?: string;
   msgRetentionDays?: number;
   msgRetentionCount?: number;
-  stripeSubscriptionId?: string;
 }
 
 const DANGEROUS_EXTENSIONS = ["exe", "bat", "cmd", "sh", "php", "cgi", "pl", "asp", "aspx", "jsp", "html", "htm", "phtml", "vbs", "ps1", "dll", "scr"];
 
 /**
- * GitHub スポンサー状態の判定ヘルパー (DB設定または環境変数 IS_GITHUB_SPONSORED / GITHUB_SPONSOR_TOKEN)
- */
-export async function checkIsSponsored(env: Env): Promise<boolean> {
-  if ((env as any).IS_GITHUB_SPONSORED === "true" || (env as any).IS_GITHUB_SPONSORED === "1" || (env as any).GITHUB_SPONSOR_TOKEN) {
-    return true;
-  }
-  try {
-    const setting = await env.DB.prepare(
-      "SELECT value FROM system_settings WHERE key = ?"
-    ).bind("is_github_sponsored").first<{ value: string }>();
-    return setting?.value === "1" || setting?.value === "true";
-  } catch (e) {
-    return false;
-  }
-}
-
-/**
  * ワークスペースの現在のサブスクリプション情報と各種リソースの使用状況を取得します。
  */
 export async function getWorkspaceSubscription(env: Env, workspaceId: string): Promise<WorkspaceLimit> {
-  const isSponsored = await checkIsSponsored(env);
-
   const defaultLimit: WorkspaceLimit = {
-    plan: isSponsored ? "sponsored" : "community",
-    planName: isSponsored ? "GitHub Sponsor Pro" : "Free Community",
+    plan: "community",
+    planName: "Community Edition",
     status: "active",
-    isSponsored,
+    isSponsored: false,
     storageLimit: Infinity,
     storageUsed: 0,
     memberLimit: Infinity,
     channelLimit: Infinity,
     memberUsed: 0,
     channelUsed: 0,
-    adminLimit: isSponsored ? Infinity : 1,
+    adminLimit: Infinity,
     adminUsed: 0,
-    announcementLimit: isSponsored ? Infinity : 1,
+    announcementLimit: Infinity,
     announcementUsed: 0,
-    auditRetentionDays: isSponsored ? Infinity : 7,
+    auditRetentionDays: Infinity,
     dmEnabled: true,
     mediaEnabled: true,
     allowedExtensions: "",

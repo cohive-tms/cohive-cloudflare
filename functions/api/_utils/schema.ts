@@ -256,4 +256,12 @@ CREATE TABLE IF NOT EXISTS custom_emojis (
 );
 
 CREATE INDEX IF NOT EXISTS idx_custom_emojis_workspace_id ON custom_emojis(workspace_id);
+
+-- 19. ログイン試行・ロック管理テーブル
+CREATE TABLE IF NOT EXISTS login_attempts (
+    email TEXT PRIMARY KEY,
+    attempts INTEGER NOT NULL DEFAULT 1,
+    lockout_until TEXT,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
 `;

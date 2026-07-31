@@ -163,13 +163,89 @@ export async function handleLoginAdmin(request: Request, env: Env): Promise<Resp
       return new Response(JSON.stringify({ error: "Email and password are required" }), { status: 400, headers });
     }
 
+    // 1. IPアドレスベースのレート制限 (第一関門)
+    const ip = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
+    if (env.RATE_LIMITER) {
+      const { success } = await env.RATE_LIMITER.limit({ key: `admin-login-ip-${ip}` });
+      if (!success) {
+        return new Response(JSON.stringify({ error: "ログイン試行回数が多すぎます。しばらく時間をおいてから再度お試しください。" }), {
+          status: 429,
+          headers,
+        });
+      }
+    }
+
+    // 2. アカウント単位のロック状態チェック (第二関門)
+    const attempt = await env.DB.prepare(
+      "SELECT attempts, lockout_until FROM login_attempts WHERE email = ?"
+    ).bind(email).first<{ attempts: number; lockout_until: string | null }>();
+
+    if (attempt && attempt.lockout_until) {
+      const lockoutTime = new Date(attempt.lockout_until).getTime();
+      if (lockoutTime > Date.now()) {
+        const waitMinutes = Math.ceil((lockoutTime - Date.now()) / (1000 * 60));
+        return new Response(JSON.stringify({ 
+          error: `セキュリティのためアカウントが一時的にロックされています。解除まであと ${waitMinutes} 分お待ちください。` 
+        }), {
+          status: 423,
+          headers,
+        });
+      }
+    }
+
+    // ログイン失敗時の回数カウント＆ロック処理ヘルパー (管理者用: 3回失敗でロック)
+    const handleLoginFailure = async () => {
+      let maxAttempts = 3;
+      try {
+        const maxAttemptsSetting = await env.DB.prepare(
+          "SELECT value FROM system_settings WHERE key = ?"
+        ).bind("admin_login_max_attempts").first<{ value: string }>();
+        if (maxAttemptsSetting?.value) {
+          maxAttempts = parseInt(maxAttemptsSetting.value, 10);
+        }
+      } catch (err) {
+        console.error("Failed to load admin_login_max_attempts setting:", err);
+      }
+      
+      const lockoutMinutes = 15;
+      const now = new Date();
+
+      if (!attempt) {
+        await env.DB.prepare(
+          "INSERT INTO login_attempts (email, attempts, updated_at) VALUES (?, 1, datetime('now'))"
+        ).bind(email).run().catch(console.error);
+      } else {
+        const nextAttempts = attempt.attempts + 1;
+        if (nextAttempts >= maxAttempts) {
+          const lockoutUntil = new Date(now.getTime() + lockoutMinutes * 60 * 1000).toISOString();
+          await env.DB.prepare(
+            "UPDATE login_attempts SET attempts = ?, lockout_until = ?, updated_at = datetime('now') WHERE email = ?"
+          ).bind(nextAttempts, lockoutUntil, email).run().catch(console.error);
+        } else {
+          await env.DB.prepare(
+            "UPDATE login_attempts SET attempts = ?, updated_at = datetime('now') WHERE email = ?"
+          ).bind(nextAttempts, email).run().catch(console.error);
+        }
+      }
+    };
+
     const admin = await env.DB.prepare(
       "SELECT * FROM saas_admins WHERE email = ?"
     ).bind(email).first<any>();
 
-    if (!admin || !(await verifyPassword(password, admin.password_hash))) {
+    if (!admin) {
+      await handleLoginFailure();
       return new Response(JSON.stringify({ error: "Invalid email or password" }), { status: 401, headers });
     }
+
+    const isPasswordValid = await verifyPassword(password, admin.password_hash);
+    if (!isPasswordValid) {
+      await handleLoginFailure();
+      return new Response(JSON.stringify({ error: "Invalid email or password" }), { status: 401, headers });
+    }
+
+    // ログイン成功時は、ログイン試行のカウントをクリア
+    await env.DB.prepare("DELETE FROM login_attempts WHERE email = ?").bind(email).run().catch(console.error);
 
     // SMTP設定を取得
     const smtpSettings = await getSmtpSettings(env);
@@ -434,7 +510,7 @@ export async function handleUpdateAdminSettings(request: Request, env: Env): Pro
     }
 
     const body: any = await request.json();
-    const { customPath, allowedIps, displayName, stripeEnabled, stripeSettings, defaultSaasPlan, auditLogRetentionDays } = body;
+    const { customPath, allowedIps, displayName, stripeEnabled, stripeSettings, defaultSaasPlan, auditLogRetentionDays, userLoginMaxAttempts, adminLoginMaxAttempts } = body;
 
     const batch = [];
 
@@ -494,11 +570,23 @@ export async function handleUpdateAdminSettings(request: Request, env: Env): Pro
       ).bind(String(auditLogRetentionDays)));
     }
 
+    if (userLoginMaxAttempts !== undefined) {
+      batch.push(env.DB.prepare(
+        "INSERT OR REPLACE INTO system_settings (key, value, updated_at) VALUES ('user_login_max_attempts', ?, datetime('now'))"
+      ).bind(String(userLoginMaxAttempts)));
+    }
+
+    if (adminLoginMaxAttempts !== undefined) {
+      batch.push(env.DB.prepare(
+        "INSERT OR REPLACE INTO system_settings (key, value, updated_at) VALUES ('admin_login_max_attempts', ?, datetime('now'))"
+      ).bind(String(adminLoginMaxAttempts)));
+    }
+
     if (batch.length > 0) {
       await env.DB.batch(batch);
     }
 
-    logAudit(env, null, auth.adminId, "admin_update_settings", { customPath, allowedIps, stripeEnabled, defaultSaasPlan, auditLogRetentionDays }, request).catch(console.error);
+    logAudit(env, null, auth.adminId, "admin_update_settings", { customPath, allowedIps, stripeEnabled, defaultSaasPlan, auditLogRetentionDays, userLoginMaxAttempts, adminLoginMaxAttempts }, request).catch(console.error);
 
     return new Response(JSON.stringify({ success: true }), { status: 200, headers });
   } catch (err: any) {
@@ -548,6 +636,14 @@ export async function handleGetCurrentAdmin(request: Request, env: Env): Promise
       "SELECT value FROM system_settings WHERE key = ?"
     ).bind("saas_audit_log_retention_days").first<{ value: string }>();
 
+    const userLoginMaxAttemptsSetting = await env.DB.prepare(
+      "SELECT value FROM system_settings WHERE key = ?"
+    ).bind("user_login_max_attempts").first<{ value: string }>();
+
+    const adminLoginMaxAttemptsSetting = await env.DB.prepare(
+      "SELECT value FROM system_settings WHERE key = ?"
+    ).bind("admin_login_max_attempts").first<{ value: string }>();
+
     const stripe = await getStripeSettings(env);
     
     const maskKey = (key: string) => {
@@ -579,7 +675,9 @@ export async function handleGetCurrentAdmin(request: Request, env: Env): Promise
         defaultSaasPlan: defaultSaasPlanSetting?.value || "free",
         stripeEnabled: stripeEnabledSetting?.value === "1",
         stripeSettings: maskedStripeSettings,
-        auditLogRetentionDays: auditLogRetentionDaysSetting ? parseInt(auditLogRetentionDaysSetting.value, 10) : 90
+        auditLogRetentionDays: auditLogRetentionDaysSetting ? parseInt(auditLogRetentionDaysSetting.value, 10) : 90,
+        userLoginMaxAttempts: userLoginMaxAttemptsSetting ? parseInt(userLoginMaxAttemptsSetting.value, 10) : 5,
+        adminLoginMaxAttempts: adminLoginMaxAttemptsSetting ? parseInt(adminLoginMaxAttemptsSetting.value, 10) : 3
       },
       clientIp,
       isAllowedIp

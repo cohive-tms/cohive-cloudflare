@@ -35,10 +35,8 @@ import {
   handleDeleteSaaSPlan,
   handleGetAdminAuditLogs,
   handleGetWorkspaceAuditLogs,
-  handleCreateBillingCheckout,
-  handleCreateBillingPortal,
-  handleStripeWebhook,
-  handleGetPublicSaaSPlans
+  handleGetPublicSaaSPlans,
+  handleGetSystemLimits
 } from "./_api/saas_extensions";
 
 let migrationsRun = false;
@@ -466,11 +464,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
       }
     }
 
-    // Stripe Webhook (SaaS全体)
-    if (pathname === "/api/billing/webhook") {
-      if (method === "POST") return await handleStripeWebhook(request, env);
-      if (method === "OPTIONS") return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, stripe-signature" } });
-    }
+
 
     // ----------------------------------------------------
     // 一般ユーザー用プラン / 決済 API (SaaS拡張分)
@@ -479,19 +473,11 @@ export const onRequest: PagesFunction<any> = async (context) => {
       return await handleGetPublicSaaSPlans(request, env);
     }
 
-    if (pathname.startsWith("/api/workspaces/") && pathname.includes("/billing/")) {
-      const match = pathname.match(/\/api\/workspaces\/([^\/]+)\/billing\/(checkout|portal)/);
-      if (match) {
-        const workspaceId = match[1];
-        const action = match[2];
-        if (action === "checkout" && method === "POST") {
-          return await handleCreateBillingCheckout(request, env, workspaceId);
-        }
-        if (action === "portal" && method === "POST") {
-          return await handleCreateBillingPortal(request, env, workspaceId);
-        }
-      }
+    if (pathname === "/api/system/limits" && (method === "GET" || method === "OPTIONS")) {
+      return await handleGetSystemLimits(request, env);
     }
+
+
 
     if (pathname.startsWith("/api/workspaces/") && pathname.endsWith("/audit-logs")) {
       const match = pathname.match(/\/api\/workspaces\/([^\/]+)\/audit-logs/);
