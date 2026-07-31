@@ -510,4 +510,61 @@ export async function handleGetSystemLimits(request: Request, env: Env): Promise
   }
 }
 
+export interface StripeSettings {
+  enabled: boolean;
+  secretKey: string;
+  publishableKey: string;
+  webhookSecret: string;
+}
+
+export async function getStripeSettings(env: Env): Promise<StripeSettings | null> {
+  try {
+    const enabledResult = await env.DB.prepare(
+      "SELECT value FROM system_settings WHERE key = ?"
+    )
+      .bind("stripe_enabled")
+      .first<{ value: string }>();
+    const enabled = enabledResult?.value === "1";
+
+    const result = await env.DB.prepare(
+      "SELECT value FROM system_settings WHERE key = ?"
+    )
+      .bind("stripe_settings")
+      .first<{ value: string }>();
+
+    if (!result || !result.value) {
+      return {
+        enabled,
+        secretKey: "",
+        publishableKey: "",
+        webhookSecret: ""
+      };
+    }
+
+    const secret = await getEncryptionSecret(env);
+    const decryptedJson = await decryptText(result.value, secret);
+    const settings = JSON.parse(decryptedJson);
+    return {
+      enabled,
+      secretKey: settings.secretKey || "",
+      publishableKey: settings.publishableKey || "",
+      webhookSecret: settings.webhookSecret || ""
+    };
+  } catch (e) {
+    console.error("Failed to retrieve or decrypt Stripe settings:", e);
+    return null;
+  }
+}
+
+export async function saveStripeSettings(env: Env, settings: StripeSettings): Promise<void> {
+  const secret = await getEncryptionSecret(env);
+  const encryptedJson = await encryptText(JSON.stringify(settings), secret);
+
+  await env.DB.prepare(
+    "INSERT OR REPLACE INTO system_settings (key, value, updated_at) VALUES ('stripe_settings', ?, datetime('now'))"
+  )
+    .bind(encryptedJson)
+    .run();
+}
+
 
