@@ -522,6 +522,47 @@ export async function handleDeleteChannel(
     if (!(await verifyChannelMember(env, channelId, userId))) {
       return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
     }
+
+    // 削除権限の検証: ワークスペース管理者(admin/owner)のみ許可
+    const channel = await env.DB.prepare(
+      "SELECT workspace_id FROM channels WHERE id = ?"
+    ).bind(channelId).first<{ workspace_id: string }>();
+
+    if (channel) {
+      const member = await env.DB.prepare(
+        "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+      ).bind(channel.workspace_id, userId).first<{ role: string }>();
+
+      const isAdmin = member && (member.role === "admin" || member.role === "owner");
+      if (!isAdmin) {
+        return new Response(
+          JSON.stringify({ error: "Forbidden: Only workspace admins can delete channels." }),
+          { status: 403, headers }
+        );
+      }
+    }
+
+    // チャンネル内の添付ファイルをすべて R2 および D1 から物理削除 (R2クリーンアップ)
+    try {
+      const { results: channelFiles } = await env.DB.prepare(
+        "SELECT object_key FROM files WHERE channel_id = ?"
+      ).bind(channelId).all<{ object_key: string }>();
+
+      if (channelFiles && channelFiles.length > 0) {
+        const storage = env.BUCKET;
+        for (const fileRec of channelFiles) {
+          if (fileRec.object_key) {
+            if (storage) {
+              await storage.delete(fileRec.object_key).catch(() => {});
+            }
+            await env.DB.prepare("DELETE FROM files WHERE object_key = ?").bind(fileRec.object_key).run().catch(() => {});
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to cleanup channel files from R2 on channel deletion:", err);
+    }
+
     await env.DB.prepare("DELETE FROM channels WHERE id = ?").bind(channelId).run();
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
@@ -767,8 +808,8 @@ export async function handleDeleteMessage(
     }
 
     const msg = await env.DB.prepare(
-      "SELECT user_id, channel_id FROM messages WHERE id = ?"
-    ).bind(messageId).first<{ user_id: string; channel_id: string }>();
+      "SELECT user_id, channel_id, file_url FROM messages WHERE id = ?"
+    ).bind(messageId).first<{ user_id: string; channel_id: string; file_url: string | null }>();
 
     if (!msg) {
       return new Response(JSON.stringify({ error: "Message not found" }), { status: 404, headers });
@@ -796,6 +837,24 @@ export async function handleDeleteMessage(
 
       if (!isAdmin) {
         return new Response(JSON.stringify({ error: "Forbidden: You cannot delete other users' messages." }), { status: 403, headers });
+      }
+    }
+
+    // 添付ファイルがある場合、R2バケットとD1 filesテーブルから削除 (R2クリーンアップ)
+    if (msg.file_url && msg.file_url.startsWith("/api/files/download/")) {
+      const objectKey = msg.file_url.substring("/api/files/download/".length);
+      const storage = env.BUCKET;
+      if (storage) {
+        try {
+          await storage.delete(objectKey);
+        } catch (r2Err) {
+          console.warn("Failed to delete attached file from R2 on message deletion:", r2Err);
+        }
+      }
+      try {
+        await env.DB.prepare("DELETE FROM files WHERE object_key = ?").bind(objectKey).run();
+      } catch (dbErr) {
+        console.warn("Failed to delete attached file record from D1 on message deletion:", dbErr);
       }
     }
 
