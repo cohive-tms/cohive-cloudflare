@@ -162,6 +162,20 @@ export async function handleAvatarUpload(request: Request, env: Env): Promise<Re
 
     const avatarUrl = `/api/files/download/${objectKey}`;
 
+    // 古いアバター画像を R2 バケットから自動削除（ストレージゾンビの防止）
+    const oldUser = await env.DB.prepare(
+      "SELECT avatar_url FROM users WHERE id = ?"
+    ).bind(userId).first<{ avatar_url: string | null }>();
+
+    if (oldUser && oldUser.avatar_url && oldUser.avatar_url.startsWith("/api/files/download/")) {
+      const oldKey = oldUser.avatar_url.substring("/api/files/download/".length);
+      try {
+        await storage.delete(oldKey);
+      } catch (delErr) {
+        console.error("Failed to delete old avatar from R2:", delErr);
+      }
+    }
+
     // D1 users テーブルのアバターURLを更新
     await env.DB.prepare(`
       UPDATE users
@@ -201,6 +215,22 @@ export async function handleFileDownload(request: Request, env: Env, objectKey: 
     const userId = await verifyUserAuth(request, env);
     if (!userId) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
+    }
+
+    // objectKey が workspaces/workspaceId/ で始まる場合、メンバー検証を行う (BOLA対策)
+    const keyParts = objectKey.split("/");
+    if (keyParts[0] === "workspaces" && keyParts[1]) {
+      const workspaceId = keyParts[1];
+      const member = await env.DB.prepare(
+        "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+      ).bind(workspaceId, userId).first();
+
+      if (!member) {
+        return new Response(
+          JSON.stringify({ error: "Forbidden: You do not have access to this workspace's files." }),
+          { status: 403, headers: corsHeaders }
+        );
+      }
     }
 
     const storage = env.BUCKET;

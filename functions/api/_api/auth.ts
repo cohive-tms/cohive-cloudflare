@@ -758,6 +758,18 @@ export async function handleRecovery(request: Request, env: Env): Promise<Respon
   }
 
   try {
+    // 1. IPアドレスベースのレート制限 (総当たり攻撃対策)
+    const ip = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
+    if (env.RATE_LIMITER) {
+      const { success } = await env.RATE_LIMITER.limit({ key: `recovery-ip-${ip}` });
+      if (!success) {
+        return new Response(JSON.stringify({ error: "リクエスト回数が多すぎます。しばらく時間をおいてから再度お試しください。" }), {
+          status: 429,
+          headers,
+        });
+      }
+    }
+
     const body: any = await request.json();
     const { email, recoveryCode, newPassword } = body;
 
@@ -835,7 +847,7 @@ export async function handleRecovery(request: Request, env: Env): Promise<Respon
       defaultChannelId = channelResult?.id || "";
     }
 
-    const secret = getJwtSecret(env);
+    const secret = await getJwtSecret(env);
     const accessToken = await signJWT(
       { userId: userResult.id, type: "access", exp: Math.floor(Date.now() / 1000) + 900 },
       secret
