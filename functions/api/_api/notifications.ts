@@ -120,6 +120,19 @@ export async function handleMarkNotificationAsRead(
   const headers = getCorsHeaders(request, "PUT, OPTIONS");
 
   try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+
+    const notif = await env.DB.prepare(
+      "SELECT user_id FROM notifications WHERE id = ?"
+    ).bind(notificationId).first<{ user_id: string }>();
+
+    if (!notif || notif.user_id !== userId) {
+      return new Response(JSON.stringify({ error: "Forbidden: You do not have access to this notification" }), { status: 403, headers });
+    }
+
     try {
       await env.DB.prepare(
         "UPDATE notifications SET is_read = 1 WHERE id = ?"
@@ -151,6 +164,19 @@ export async function handleArchiveNotification(
   const headers = getCorsHeaders(request, "PUT, OPTIONS");
 
   try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+
+    const notif = await env.DB.prepare(
+      "SELECT user_id FROM notifications WHERE id = ?"
+    ).bind(notificationId).first<{ user_id: string }>();
+
+    if (!notif || notif.user_id !== userId) {
+      return new Response(JSON.stringify({ error: "Forbidden: You do not have access to this notification" }), { status: 403, headers });
+    }
+
     try {
       await env.DB.prepare(
         "DELETE FROM notifications WHERE id = ?"
