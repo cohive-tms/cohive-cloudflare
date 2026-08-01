@@ -1,5 +1,6 @@
 import type { Env } from "../[[route]]";
-import { verifyJWT, getJwtSecret } from "../_utils/jwt";
+import { verifyUserAuth, verifyWorkspaceMember } from "../_utils/jwt";
+import { getCorsHeaders } from "../_utils/cors";
 
 /**
  * ワークスペースのグループ一覧を取得します。
@@ -10,16 +11,16 @@ export async function handleGetWorkspaceGroups(
   env: Env,
   workspaceId: string
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "GET, OPTIONS");
 
   try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+    if (!(await verifyWorkspaceMember(env, workspaceId, userId))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
+    }
     const { results: groups } = await env.DB.prepare(`
       SELECT id, workspace_id as workspaceId, name, is_private as isPrivate, created_at as createdAt
       FROM groups
@@ -78,16 +79,16 @@ export async function handleCreateGroup(
   env: Env,
   workspaceId: string
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "POST, OPTIONS");
 
   try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+    if (!(await verifyWorkspaceMember(env, workspaceId, userId))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
+    }
     const body: any = await request.json();
     const { name, isPrivate = false, memberUserIds = [], leaderUserIds = [] } = body;
 
@@ -148,16 +149,16 @@ export async function handleDeleteGroup(
   workspaceId: string,
   groupId: string
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "DELETE, OPTIONS");
 
   try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+    if (!(await verifyWorkspaceMember(env, workspaceId, userId))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
+    }
     await env.DB.prepare("DELETE FROM groups WHERE id = ? AND workspace_id = ?").bind(groupId, workspaceId).run();
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
@@ -180,28 +181,10 @@ export async function handleCreateOrGetDm(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "POST, OPTIONS");
 
   try {
-    let currentUserId = request.headers.get("X-User-Id");
-    if (!currentUserId) {
-      const authHeader = request.headers.get("Authorization");
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        const token = authHeader.substring(7);
-        const secret = getJwtSecret(env);
-        const payload = await verifyJWT(token, secret);
-        if (payload && payload.userId) {
-          currentUserId = payload.userId as string;
-        }
-      }
-    }
+    const currentUserId = await verifyUserAuth(request, env);
 
     if (!currentUserId) {
       return new Response(JSON.stringify({ error: "Unauthorized: User ID missing" }), {
@@ -218,6 +201,10 @@ export async function handleCreateOrGetDm(
         status: 400,
         headers,
       });
+    }
+
+    if (!(await verifyWorkspaceMember(env, workspaceId, currentUserId))) {
+      return new Response(JSON.stringify({ error: "Forbidden: You are not a member of this workspace" }), { status: 403, headers });
     }
 
     // 既存のDMチャンネルがあるか確認

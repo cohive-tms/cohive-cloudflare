@@ -1,5 +1,5 @@
 import type { Env } from "../[[route]]";
-import { signJWT, verifyJWT, getJwtSecret } from "../_utils/jwt";
+import { signJWT, verifyJWT, getJwtSecret, verifyUserAuth } from "../_utils/jwt";
 import { hashPassword, verifyPassword, generateRecoveryCode } from "./setup";
 import { sendMail, getSmtpSettings } from "../_utils/smtp";
 import { getStripeSettings, saveStripeSettings, StripeSettings } from "./saas_extensions";
@@ -1415,6 +1415,19 @@ export async function handleGetWorkspaceBranding(request: Request, env: Env, wor
 // 28. ワークスペースブランディングの更新
 export async function handleUpdateWorkspaceBranding(request: Request, env: Env, workspaceId: string): Promise<Response> {
   try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+
+    const member = await env.DB.prepare(
+      "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+    ).bind(workspaceId, userId).first<{ role: string }>();
+
+    if (!member || (member.role !== 'owner' && member.role !== 'admin')) {
+      return new Response(JSON.stringify({ error: "Forbidden: Only owners or admins can update branding" }), { status: 403, headers });
+    }
+
     const body: any = await request.json();
     const { custom_logo_url, primary_color, brand_name } = body;
 

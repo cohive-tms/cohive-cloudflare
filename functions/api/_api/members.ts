@@ -1,5 +1,6 @@
 import type { Env } from "../[[route]]";
-import { verifyJWT, getJwtSecret } from "../_utils/jwt";
+import { verifyUserAuth, verifyWorkspaceMember } from "../_utils/jwt";
+import { getCorsHeaders } from "../_utils/cors";
 
 /**
  * ワークスペースのメンバー一覧を取得します。
@@ -10,16 +11,16 @@ export async function handleGetWorkspaceMembers(
   env: Env,
   workspaceId: string
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "GET, OPTIONS");
 
   try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+    if (!(await verifyWorkspaceMember(env, workspaceId, userId))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
+    }
     const { results } = await env.DB.prepare(`
       SELECT 
         u.id as userId,
@@ -60,16 +61,16 @@ export async function handleAddWorkspaceMember(
   env: Env,
   workspaceId: string
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "POST, OPTIONS");
 
   try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+    if (!(await verifyWorkspaceMember(env, workspaceId, userId))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
+    }
     const body: any = await request.json();
     const { email, displayName, role = 'member' } = body;
 
@@ -130,16 +131,16 @@ export async function handleReinviteMember(
   workspaceId: string,
   targetUserId: string
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "POST, OPTIONS");
 
   try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+    if (!(await verifyWorkspaceMember(env, workspaceId, userId))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
+    }
     return new Response(JSON.stringify({
       success: true,
       message: "Re-invitation email sent"
@@ -165,28 +166,10 @@ export async function handleGetUserRole(
   env: Env,
   workspaceId: string
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "GET, OPTIONS");
 
   try {
-    let userId = request.headers.get("X-User-Id");
-    if (!userId) {
-      const authHeader = request.headers.get("Authorization");
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        const token = authHeader.substring(7);
-        const secret = getJwtSecret(env);
-        const payload = await verifyJWT(token, secret);
-        if (payload && payload.userId) {
-          userId = payload.userId as string;
-        }
-      }
-    }
+    const userId = await verifyUserAuth(request, env);
 
     if (!userId) {
       return new Response(JSON.stringify({ success: true, role: 'guest', ledGroups: [] }), {
@@ -234,16 +217,21 @@ export async function handleUpdateMemberRole(
   workspaceId: string,
   targetUserId: string
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "PUT, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "PUT, OPTIONS");
 
   try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+
+    const member = await env.DB.prepare(
+      "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+    ).bind(workspaceId, userId).first<{ role: string }>();
+
+    if (!member || (member.role !== 'owner' && member.role !== 'admin')) {
+      return new Response(JSON.stringify({ error: "Forbidden: Only owners or admins can change member roles" }), { status: 403, headers });
+    }
     const body: any = await request.json();
     const { role } = body;
 
@@ -283,16 +271,21 @@ export async function handleRemoveMember(
   workspaceId: string,
   targetUserId: string
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "DELETE, OPTIONS");
 
   try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+
+    const member = await env.DB.prepare(
+      "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+    ).bind(workspaceId, userId).first<{ role: string }>();
+
+    if (!member || (userId !== targetUserId && member.role !== 'owner' && member.role !== 'admin')) {
+      return new Response(JSON.stringify({ error: "Forbidden: Permission denied" }), { status: 403, headers });
+    }
     await env.DB.prepare(
       "DELETE FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
     ).bind(workspaceId, targetUserId).run();
@@ -318,28 +311,10 @@ export async function handleUpdateUserProfile(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "PUT, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "PUT, OPTIONS");
 
   try {
-    let userId = request.headers.get("X-User-Id");
-    if (!userId) {
-      const authHeader = request.headers.get("Authorization");
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        const token = authHeader.substring(7);
-        const secret = getJwtSecret(env);
-        const payload = await verifyJWT(token, secret);
-        if (payload && payload.userId) {
-          userId = payload.userId as string;
-        }
-      }
-    }
+    const userId = await verifyUserAuth(request, env);
 
     if (!userId) {
       return new Response(JSON.stringify({ error: "Unauthorized: User ID missing" }), {

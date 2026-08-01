@@ -262,3 +262,43 @@ export async function verifyUserAuth(request: Request, env: Env): Promise<string
   return null;
 }
 
+/**
+ * ユーザーが該当ワークスペースのメンバーであるかを検証します。
+ */
+export async function verifyWorkspaceMember(
+  env: Env,
+  workspaceId: string,
+  userId: string
+): Promise<boolean> {
+  try {
+    const member = await env.DB.prepare(
+      "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+    ).bind(workspaceId, userId).first();
+    return !!member;
+  } catch (e) {
+    console.error("Workspace membership verification failed:", e);
+    return false;
+  }
+}
+
+/**
+ * ユーザーが該当チャンネルの属するワークスペースのメンバーであるかを検証します。
+ */
+export async function verifyChannelMember(
+  env: Env,
+  channelId: string,
+  userId: string
+): Promise<boolean> {
+  try {
+    const channel = await env.DB.prepare(
+      "SELECT workspace_id FROM channels WHERE id = ?"
+    ).bind(channelId).first<{ workspace_id: string }>();
+    if (!channel || !channel.workspace_id) return false;
+    return await verifyWorkspaceMember(env, channel.workspace_id, userId);
+  } catch (e) {
+    console.error("Channel membership verification failed:", e);
+    return false;
+  }
+}
+
+

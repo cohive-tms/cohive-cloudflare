@@ -1,5 +1,6 @@
 import type { Env } from "../[[route]]";
-import { verifyJWT, getJwtSecret } from "../_utils/jwt";
+import { verifyUserAuth, verifyWorkspaceMember } from "../_utils/jwt";
+import { getCorsHeaders } from "../_utils/cors";
 
 /**
  * ワークスペース内のアイテム（タスク/予定）一覧を取得します。
@@ -10,16 +11,16 @@ export async function handleGetWorkspaceItems(
   env: Env,
   workspaceId: string
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "GET, OPTIONS");
 
   try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+    if (!(await verifyWorkspaceMember(env, workspaceId, userId))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
+    }
     const url = new URL(request.url);
     const channelId = url.searchParams.get("channelId");
 
@@ -112,28 +113,10 @@ export async function handleGetItems(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "GET, OPTIONS");
 
   try {
-    let userId = request.headers.get("X-User-Id");
-    if (!userId) {
-      const authHeader = request.headers.get("Authorization");
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        const token = authHeader.substring(7);
-        const secret = getJwtSecret(env);
-        const payload = await verifyJWT(token, secret);
-        if (payload && payload.userId) {
-          userId = payload.userId as string;
-        }
-      }
-    }
+    const userId = await verifyUserAuth(request, env);
 
     if (!userId) {
       return new Response(JSON.stringify({ success: true, data: [] }), {
@@ -207,34 +190,18 @@ export async function handleCreateItem(
   env: Env,
   workspaceId: string
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "POST, OPTIONS");
 
   try {
-    let userId = request.headers.get("X-User-Id");
+    const userId = await verifyUserAuth(request, env);
     if (!userId) {
-      const authHeader = request.headers.get("Authorization");
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        const token = authHeader.substring(7);
-        const secret = getJwtSecret(env);
-        const payload = await verifyJWT(token, secret);
-        if (payload && payload.userId) {
-          userId = payload.userId as string;
-        }
-      }
-    }
-
-    if (!userId) {
-      return new Response(JSON.stringify({ error: "Unauthorized: User ID missing" }), {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers,
       });
+    }
+    if (!(await verifyWorkspaceMember(env, workspaceId, userId))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
     }
 
     const body: any = await request.json();
@@ -331,16 +298,21 @@ export async function handleUpdateItem(
   env: Env,
   itemId: string
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "PUT, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "PUT, OPTIONS");
 
   try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+
+    const item = await env.DB.prepare(
+      "SELECT workspace_id FROM items WHERE id = ?"
+    ).bind(itemId).first<{ workspace_id: string }>();
+
+    if (!item || !(await verifyWorkspaceMember(env, item.workspace_id, userId))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
+    }
     const body: any = await request.json();
     const {
       title,
@@ -412,16 +384,21 @@ export async function handleDeleteItem(
   env: Env,
   itemId: string
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "DELETE, OPTIONS");
 
   try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+
+    const item = await env.DB.prepare(
+      "SELECT workspace_id FROM items WHERE id = ?"
+    ).bind(itemId).first<{ workspace_id: string }>();
+
+    if (!item || !(await verifyWorkspaceMember(env, item.workspace_id, userId))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
+    }
     await env.DB.prepare("DELETE FROM items WHERE id = ?").bind(itemId).run();
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
