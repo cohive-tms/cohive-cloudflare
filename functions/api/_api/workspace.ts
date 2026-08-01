@@ -125,6 +125,18 @@ export async function handleUpdateWorkspace(request: Request, env: Env, workspac
   const headers = getCorsHeaders(request, "PUT, OPTIONS");
 
   try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+
+    const member = await env.DB.prepare(
+      "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+    ).bind(workspaceId, userId).first<{ role: string }>();
+
+    if (!member || member.role !== 'owner') {
+      return new Response(JSON.stringify({ error: "Forbidden: Only workspace owners can update this workspace" }), { status: 403, headers });
+    }
     const body: any = await request.json();
     const { name, customStatuses } = body;
 
@@ -164,6 +176,18 @@ export async function handleDeleteWorkspace(request: Request, env: Env, workspac
   const headers = getCorsHeaders(request, "DELETE, OPTIONS");
 
   try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+
+    const member = await env.DB.prepare(
+      "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+    ).bind(workspaceId, userId).first<{ role: string }>();
+
+    if (!member || member.role !== 'owner') {
+      return new Response(JSON.stringify({ error: "Forbidden: Only workspace owners can delete this workspace" }), { status: 403, headers });
+    }
     await env.DB.prepare("DELETE FROM workspaces WHERE id = ?").bind(workspaceId).run();
     return new Response(JSON.stringify({ success: true }), {
       status: 200,

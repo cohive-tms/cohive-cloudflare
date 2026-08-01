@@ -1,5 +1,5 @@
 import type { Env } from "../[[route]]";
-import { verifyUserAuth } from "../_utils/jwt";
+import { verifyUserAuth, verifyWorkspaceMember } from "../_utils/jwt";
 import { getCorsHeaders } from "../_utils/cors";
 
 
@@ -24,6 +24,10 @@ export async function handleFileUpload(request: Request, env: Env): Promise<Resp
 
     if (!file || !workspaceId) {
       return new Response(JSON.stringify({ error: "Missing file or workspaceId" }), { status: 400, headers });
+    }
+
+    if (!(await verifyWorkspaceMember(env, workspaceId, userId))) {
+      return new Response(JSON.stringify({ error: "Forbidden: You do not have access to this workspace" }), { status: 403, headers });
     }
 
     // 容量制限チェック（SaaSプランの上限）
