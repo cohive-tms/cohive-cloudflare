@@ -221,3 +221,44 @@ export function getCookieOptions(
     sameSite: sameSite as "Lax" | "None" | "Strict",
   };
 }
+
+/**
+ * リクエストに含まれる認証情報を検証し、ユーザーIDを返します。
+ * ヘッダー（X-User-Id, Authorization）またはクエリパラメータ（user_id, token）に対応します。
+ */
+export async function verifyUserAuth(request: Request, env: Env): Promise<string | null> {
+  const url = new URL(request.url);
+
+  // 1. ヘッダーまたはクエリパラメータから userId を直接取得
+  let userId = request.headers.get("X-User-Id") || 
+               url.searchParams.get("user_id") || 
+               url.searchParams.get("userId");
+
+  if (userId) {
+    return userId;
+  }
+
+  // 2. Authorizationヘッダーまたはクエリパラメータからトークンを取得してJWT検証
+  let token = url.searchParams.get("token");
+  if (!token) {
+    const authHeader = request.headers.get("Authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.substring(7);
+    }
+  }
+
+  if (token) {
+    try {
+      const secret = await getJwtSecret(env);
+      const payload = await verifyJWT(token, secret);
+      if (payload && payload.userId) {
+        return payload.userId as string;
+      }
+    } catch (e) {
+      console.error("JWT verification failed in verifyUserAuth:", e);
+    }
+  }
+
+  return null;
+}
+

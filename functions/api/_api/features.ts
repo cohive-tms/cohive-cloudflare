@@ -1,41 +1,8 @@
 import type { Env } from "../[[route]]";
-import { verifyJWT, getJwtSecret } from "../_utils/jwt";
+import { verifyUserAuth } from "../_utils/jwt";
+import { getCorsHeaders } from "../_utils/cors";
 
-/**
- * リクエストに含まれる認証情報を検証し、ユーザーIDを返します。
- */
-async function verifyUserAuth(request: Request, env: Env): Promise<string | null> {
-  const url = new URL(request.url);
-  let userId = request.headers.get("X-User-Id") || 
-               url.searchParams.get("user_id") || 
-               url.searchParams.get("userId");
 
-  if (userId) {
-    return userId;
-  }
-
-  let token = url.searchParams.get("token");
-  if (!token) {
-    const authHeader = request.headers.get("Authorization");
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      token = authHeader.substring(7);
-    }
-  }
-
-  if (token) {
-    try {
-      const secret = getJwtSecret(env);
-      const payload = await verifyJWT(token, secret);
-      if (payload && payload.userId) {
-        return payload.userId as string;
-      }
-    } catch (e) {
-      console.error("JWT verification failed in verifyUserAuth (features):", e);
-    }
-  }
-
-  return null;
-}
 
 /**
  * ワークスペース内を横断検索します（メッセージ・タスク）。
@@ -46,14 +13,7 @@ export async function handleSearchWorkspace(
   env: Env,
   workspaceId: string
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "GET, OPTIONS");
 
   try {
     const url = new URL(request.url);
@@ -109,14 +69,7 @@ export async function handleGetActivities(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "GET, OPTIONS");
 
   try {
     const userId = await verifyUserAuth(request, env);
@@ -216,14 +169,7 @@ export async function handleGetCustomEmojis(
   env: Env,
   workspaceId: string
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "GET, OPTIONS");
 
   try {
     const userId = await verifyUserAuth(request, env);
@@ -268,14 +214,7 @@ export async function handleCreateCustomEmoji(
   env: Env,
   workspaceId: string
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "POST, OPTIONS");
 
   try {
     const userId = await verifyUserAuth(request, env);

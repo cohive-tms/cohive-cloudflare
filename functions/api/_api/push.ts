@@ -1,55 +1,15 @@
 import type { Env } from "../[[route]]";
-import { verifyJWT, getJwtSecret } from "../_utils/jwt";
+import { verifyUserAuth } from "../_utils/jwt";
+import { getCorsHeaders } from "../_utils/cors";
 
-/**
- * リクエストに含まれる認証情報を検証し、ユーザーIDを返します。
- */
-async function verifyUserAuth(request: Request, env: Env): Promise<string | null> {
-  const url = new URL(request.url);
-  let userId = request.headers.get("X-User-Id") || 
-               url.searchParams.get("user_id") || 
-               url.searchParams.get("userId");
 
-  if (userId) {
-    return userId;
-  }
-
-  let token = url.searchParams.get("token");
-  if (!token) {
-    const authHeader = request.headers.get("Authorization");
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      token = authHeader.substring(7);
-    }
-  }
-
-  if (token) {
-    try {
-      const secret = getJwtSecret(env);
-      const payload = await verifyJWT(token, secret);
-      if (payload && payload.userId) {
-        return payload.userId as string;
-      }
-    } catch (e) {
-      console.error("JWT verification failed in verifyUserAuth (push):", e);
-    }
-  }
-
-  return null;
-}
 
 /**
  * プッシュ通知購読の登録処理
  * POST /api/push/subscribe
  */
 export async function handlePushSubscribe(request: Request, env: Env): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "POST, OPTIONS");
 
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers });

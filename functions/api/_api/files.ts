@@ -1,59 +1,15 @@
 import type { Env } from "../[[route]]";
-import { verifyJWT, getJwtSecret } from "../_utils/jwt";
+import { verifyUserAuth } from "../_utils/jwt";
+import { getCorsHeaders } from "../_utils/cors";
 
-/**
- * リクエストに含まれる認証情報を検証し、ユーザーIDを返します。
- * ヘッダー（X-User-Id, Authorization）またはクエリパラメータ（user_id, token）に対応します。
- */
-async function verifyUserAuth(request: Request, env: Env): Promise<string | null> {
-  const url = new URL(request.url);
 
-  // 1. ヘッダーまたはクエリパラメータから userId を直接取得
-  let userId = request.headers.get("X-User-Id") || 
-               url.searchParams.get("user_id") || 
-               url.searchParams.get("userId");
-
-  if (userId) {
-    return userId;
-  }
-
-  // 2. Authorizationヘッダーまたはクエリパラメータからトークンを取得してJWT検証
-  let token = url.searchParams.get("token");
-  if (!token) {
-    const authHeader = request.headers.get("Authorization");
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      token = authHeader.substring(7);
-    }
-  }
-
-  if (token) {
-    try {
-      const secret = getJwtSecret(env);
-      const payload = await verifyJWT(token, secret);
-      if (payload && payload.userId) {
-        return payload.userId as string;
-      }
-    } catch (e) {
-      console.error("JWT verification failed in verifyUserAuth:", e);
-    }
-  }
-
-  return null;
-}
 
 /**
  * ファイルのアップロード処理（チャット添付ファイル・メディアライブラリ）
  * POST /api/files/upload
  */
 export async function handleFileUpload(request: Request, env: Env): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "POST, OPTIONS");
 
   try {
     const userId = await verifyUserAuth(request, env);
@@ -160,14 +116,7 @@ export async function handleFileUpload(request: Request, env: Env): Promise<Resp
  * POST /api/avatars/upload
  */
 export async function handleAvatarUpload(request: Request, env: Env): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "POST, OPTIONS");
 
   try {
     const userId = await verifyUserAuth(request, env);
@@ -241,13 +190,7 @@ export async function handleAvatarUpload(request: Request, env: Env): Promise<Re
  * GET /api/files/download/*
  */
 export async function handleFileDownload(request: Request, env: Env, objectKey: string): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const corsHeaders = {
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const corsHeaders = getCorsHeaders(request, "GET, OPTIONS");
 
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -271,8 +214,7 @@ export async function handleFileDownload(request: Request, env: Env, objectKey: 
     }
 
     const headers = new Headers();
-    headers.set("Access-Control-Allow-Origin", origin);
-    headers.set("Access-Control-Allow-Credentials", "true");
+    Object.entries(corsHeaders).forEach(([k, v]) => headers.set(k, v));
 
     // Content-Type を引き継ぐ
     const contentType = object.httpMetadata?.contentType || "application/octet-stream";

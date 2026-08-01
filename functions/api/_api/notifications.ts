@@ -1,5 +1,6 @@
 import type { Env } from "../[[route]]";
-import { verifyJWT, getJwtSecret } from "../_utils/jwt";
+import { verifyUserAuth } from "../_utils/jwt";
+import { getCorsHeaders } from "../_utils/cors";
 
 /**
  * ユーザーの通知一覧を取得します。
@@ -9,28 +10,10 @@ export async function handleGetNotifications(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "GET, OPTIONS");
 
   try {
-    let userId = request.headers.get("X-User-Id");
-    if (!userId) {
-      const authHeader = request.headers.get("Authorization");
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        const token = authHeader.substring(7);
-        const secret = getJwtSecret(env);
-        const payload = await verifyJWT(token, secret);
-        if (payload && payload.userId) {
-          userId = payload.userId as string;
-        }
-      }
-    }
+    const userId = await verifyUserAuth(request, env);
 
     if (!userId) {
       return new Response(JSON.stringify({ success: true, data: [], unreadCount: 0 }), {
@@ -86,28 +69,10 @@ export async function handleGetUnreadNotificationsCount(
   request: Request,
   env: Env
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "GET, OPTIONS");
 
   try {
-    let userId = request.headers.get("X-User-Id");
-    if (!userId) {
-      const authHeader = request.headers.get("Authorization");
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        const token = authHeader.substring(7);
-        const secret = getJwtSecret(env);
-        const payload = await verifyJWT(token, secret);
-        if (payload && payload.userId) {
-          userId = payload.userId as string;
-        }
-      }
-    }
+    const userId = await verifyUserAuth(request, env);
 
     if (!userId) {
       return new Response(JSON.stringify({ success: true, count: 0 }), {
@@ -152,14 +117,7 @@ export async function handleMarkNotificationAsRead(
   env: Env,
   notificationId: string
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "PUT, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "PUT, OPTIONS");
 
   try {
     try {
@@ -190,14 +148,7 @@ export async function handleArchiveNotification(
   env: Env,
   notificationId: string
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "PUT, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "PUT, OPTIONS");
 
   try {
     try {
@@ -228,14 +179,7 @@ export async function handleMarkAllNotificationsAsRead(
   env: Env,
   workspaceId: string
 ): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "PUT, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "PUT, OPTIONS");
 
   try {
     let userId = request.headers.get("X-User-Id");
