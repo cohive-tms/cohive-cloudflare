@@ -128,7 +128,13 @@ export async function getJwtSecret(env: Env): Promise<string> {
     return cachedJwtSecret;
   }
 
-  // 2. D1データベースのsystem_settingsから取得を試みる
+  // 2. 環境変数の最優先チェック
+  if (env.JWT_SECRET && env.JWT_SECRET.trim() !== "") {
+    cachedJwtSecret = env.JWT_SECRET;
+    return env.JWT_SECRET;
+  }
+
+  // 3. D1データベースのsystem_settingsから取得を試みる
   try {
     const result = await env.DB.prepare(
       "SELECT value FROM system_settings WHERE key = ?"
@@ -142,7 +148,12 @@ export async function getJwtSecret(env: Env): Promise<string> {
     console.error("Failed to read jwt_secret from D1 Database. Settings table might not be initialized yet.", e);
   }
 
-  // 3. 初期セットアップ前などで値が存在しない場合は、一回限りのランダムシークレットを動的生成（固定キーによる署名偽造を防止）
+  // 4. 本番環境での一時的なランダムキーフォールバックの禁止
+  if (env.ENVIRONMENT === "production") {
+    throw new Error("CRITICAL: JWT_SECRET environment variable or D1 jwt_secret setting is required in production environment.");
+  }
+
+  // 5. 初期セットアップ前などで値が存在しない場合は、一回限りのランダムシークレットを動的生成（開発環境用）
   console.warn("jwt_secret not found in DB. Generating transient random secret for session.");
   cachedJwtSecret = generateRandomSecret();
   return cachedJwtSecret;
