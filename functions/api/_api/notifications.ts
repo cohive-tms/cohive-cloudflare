@@ -1,5 +1,5 @@
 import type { Env } from "../[[route]]";
-import { verifyUserAuth } from "../_utils/jwt";
+import { verifyUserAuth, verifyWorkspaceMember } from "../_utils/jwt";
 import { getCorsHeaders } from "../_utils/cors";
 
 /**
@@ -182,14 +182,19 @@ export async function handleMarkAllNotificationsAsRead(
   const headers = getCorsHeaders(request, "PUT, OPTIONS");
 
   try {
-    let userId = request.headers.get("X-User-Id");
-    if (userId) {
-      try {
-        await env.DB.prepare(
-          "UPDATE notifications SET is_read = 1 WHERE workspace_id = ? AND user_id = ?"
-        ).bind(workspaceId, userId).run();
-      } catch (e) {}
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
     }
+    if (!(await verifyWorkspaceMember(env, workspaceId, userId))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
+    }
+
+    try {
+      await env.DB.prepare(
+        "UPDATE notifications SET is_read = 1 WHERE workspace_id = ? AND user_id = ?"
+      ).bind(workspaceId, userId).run();
+    } catch (e) {}
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,

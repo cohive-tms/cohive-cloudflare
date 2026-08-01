@@ -2,7 +2,7 @@ import type { Env } from "../[[route]]";
 import { signJWT, verifyJWT, getJwtSecret, verifyUserAuth } from "../_utils/jwt";
 import { hashPassword, verifyPassword, generateRecoveryCode } from "./setup";
 import { sendMail, getSmtpSettings } from "../_utils/smtp";
-import { getStripeSettings, saveStripeSettings, StripeSettings } from "./saas_extensions";
+
 import { logAudit } from "../_utils/audit";
 
 const headers = {
@@ -536,27 +536,7 @@ export async function handleUpdateAdminSettings(request: Request, env: Env): Pro
       ).bind(displayName.trim(), auth.adminId));
     }
 
-    if (stripeEnabled !== undefined) {
-      batch.push(env.DB.prepare(
-        "INSERT OR REPLACE INTO system_settings (key, value, updated_at) VALUES ('stripe_enabled', ?, datetime('now'))"
-      ).bind(stripeEnabled ? "1" : "0"));
-    }
 
-    if (stripeSettings !== undefined) {
-      const currentStripe = await getStripeSettings(env);
-      const secretKey = (stripeSettings.secretKey && !stripeSettings.secretKey.includes("••••")) ? stripeSettings.secretKey : (currentStripe?.secretKey || "");
-      const publishableKey = stripeSettings.publishableKey || "";
-      const webhookSecret = (stripeSettings.webhookSecret && !stripeSettings.webhookSecret.includes("••••")) ? stripeSettings.webhookSecret : (currentStripe?.webhookSecret || "");
-
-      const nextSettings: StripeSettings = {
-        enabled: stripeEnabled !== undefined ? stripeEnabled : (currentStripe?.enabled ?? false),
-        secretKey,
-        publishableKey,
-        webhookSecret,
-      };
-
-      await saveStripeSettings(env, nextSettings);
-    }
 
     if (defaultSaasPlan !== undefined) {
       batch.push(env.DB.prepare(
@@ -586,7 +566,7 @@ export async function handleUpdateAdminSettings(request: Request, env: Env): Pro
       await env.DB.batch(batch);
     }
 
-    logAudit(env, null, auth.adminId, "admin_update_settings", { customPath, allowedIps, stripeEnabled, defaultSaasPlan, auditLogRetentionDays, userLoginMaxAttempts, adminLoginMaxAttempts }, request).catch(console.error);
+    logAudit(env, null, auth.adminId, "admin_update_settings", { customPath, allowedIps, defaultSaasPlan, auditLogRetentionDays, userLoginMaxAttempts, adminLoginMaxAttempts }, request).catch(console.error);
 
     return new Response(JSON.stringify({ success: true }), { status: 200, headers });
   } catch (err: any) {
@@ -628,9 +608,7 @@ export async function handleGetCurrentAdmin(request: Request, env: Env): Promise
       "SELECT value FROM system_settings WHERE key = ?"
     ).bind("default_saas_plan").first<{ value: string }>();
 
-    const stripeEnabledSetting = await env.DB.prepare(
-      "SELECT value FROM system_settings WHERE key = ?"
-    ).bind("stripe_enabled").first<{ value: string }>();
+
 
     const auditLogRetentionDaysSetting = await env.DB.prepare(
       "SELECT value FROM system_settings WHERE key = ?"
@@ -644,19 +622,7 @@ export async function handleGetCurrentAdmin(request: Request, env: Env): Promise
       "SELECT value FROM system_settings WHERE key = ?"
     ).bind("admin_login_max_attempts").first<{ value: string }>();
 
-    const stripe = await getStripeSettings(env);
-    
-    const maskKey = (key: string) => {
-      if (!key) return "";
-      if (key.length <= 8) return "••••••••";
-      return `${key.slice(0, 7)}••••••••${key.slice(-4)}`;
-    };
 
-    const maskedStripeSettings = stripe ? {
-      secretKey: maskKey(stripe.secretKey),
-      publishableKey: stripe.publishableKey,
-      webhookSecret: maskKey(stripe.webhookSecret)
-    } : { secretKey: "", publishableKey: "", webhookSecret: "" };
 
     const clientIp = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
 
@@ -673,8 +639,7 @@ export async function handleGetCurrentAdmin(request: Request, env: Env): Promise
         customPath: customPathSetting?.value || "admin",
         allowedIps: allowedIpsSetting?.value || "",
         defaultSaasPlan: defaultSaasPlanSetting?.value || "free",
-        stripeEnabled: stripeEnabledSetting?.value === "1",
-        stripeSettings: maskedStripeSettings,
+
         auditLogRetentionDays: auditLogRetentionDaysSetting ? parseInt(auditLogRetentionDaysSetting.value, 10) : 90,
         userLoginMaxAttempts: userLoginMaxAttemptsSetting ? parseInt(userLoginMaxAttemptsSetting.value, 10) : 5,
         adminLoginMaxAttempts: adminLoginMaxAttemptsSetting ? parseInt(adminLoginMaxAttemptsSetting.value, 10) : 3

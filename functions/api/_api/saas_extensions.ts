@@ -2,6 +2,7 @@ import type { Env } from "../[[route]]";
 import { decryptText, encryptText, getEncryptionSecret } from "../_utils/smtp";
 import { logAudit } from "../_utils/audit";
 import { checkIpRestriction, verifyAdminAuth } from "./admin";
+import { verifyUserAuth, verifyWorkspaceMember } from "../_utils/jwt";
 
 const headers = {
   "Content-Type": "application/json",
@@ -300,7 +301,7 @@ export async function handleGetWorkspaceAuditLogs(request: Request, env: Env, wo
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers });
 
   try {
-    const userId = request.headers.get("X-User-Id");
+    const userId = await verifyUserAuth(request, env);
     if (!userId) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
 
     const member = await env.DB.prepare(
@@ -374,8 +375,17 @@ export async function handleGetWorkspaceSubscription(request: Request, env: Env,
   }
 
   try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: reqHeaders });
+    }
+
     if (!workspaceId) {
       return new Response(JSON.stringify({ error: "Workspace ID is required" }), { status: 400, headers: reqHeaders });
+    }
+
+    if (!(await verifyWorkspaceMember(env, workspaceId, userId))) {
+      return new Response(JSON.stringify({ error: "Forbidden: You do not have access to this workspace" }), { status: 403, headers: reqHeaders });
     }
 
     let planData: any = null;
@@ -510,61 +520,6 @@ export async function handleGetSystemLimits(request: Request, env: Env): Promise
   }
 }
 
-export interface StripeSettings {
-  enabled: boolean;
-  secretKey: string;
-  publishableKey: string;
-  webhookSecret: string;
-}
 
-export async function getStripeSettings(env: Env): Promise<StripeSettings | null> {
-  try {
-    const enabledResult = await env.DB.prepare(
-      "SELECT value FROM system_settings WHERE key = ?"
-    )
-      .bind("stripe_enabled")
-      .first<{ value: string }>();
-    const enabled = enabledResult?.value === "1";
-
-    const result = await env.DB.prepare(
-      "SELECT value FROM system_settings WHERE key = ?"
-    )
-      .bind("stripe_settings")
-      .first<{ value: string }>();
-
-    if (!result || !result.value) {
-      return {
-        enabled,
-        secretKey: "",
-        publishableKey: "",
-        webhookSecret: ""
-      };
-    }
-
-    const secret = await getEncryptionSecret(env);
-    const decryptedJson = await decryptText(result.value, secret);
-    const settings = JSON.parse(decryptedJson);
-    return {
-      enabled,
-      secretKey: settings.secretKey || "",
-      publishableKey: settings.publishableKey || "",
-      webhookSecret: settings.webhookSecret || ""
-    };
-  } catch (e) {
-    console.error("Failed to retrieve or decrypt Stripe settings:", e);
-    return null;
-  }
-}
-
-export async function saveStripeSettings(env: Env, settings: StripeSettings): Promise<void> {
-  const secret = await getEncryptionSecret(env);
-  const encryptedJson = await encryptText(JSON.stringify(settings), secret);
-
-  await env.DB.prepare(
-    "INSERT OR REPLACE INTO system_settings (key, value, updated_at) VALUES ('stripe_settings', ?, datetime('now'))"
-  )
-    .bind(encryptedJson)
-    .run();
-}
 
 

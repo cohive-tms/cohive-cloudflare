@@ -82,8 +82,6 @@ async function runSaasMigrations(env: any) {
         member_limit INTEGER NOT NULL,
         channel_limit INTEGER NOT NULL,
         status TEXT NOT NULL,
-        stripe_subscription_id TEXT DEFAULT '',
-        stripe_customer_id TEXT DEFAULT '',
         current_period_end TEXT DEFAULT '',
         updated_at TEXT
       )
@@ -517,7 +515,6 @@ export const onRequest: PagesFunction<any> = async (context) => {
             COALESCE(p.msg_retention_count, 0) as msg_retention_count,
             COALESCE(p.max_file_size_mb, 100) as max_file_size_mb,
             s.status,
-            s.stripe_subscription_id,
             p.name as plan_name
           FROM workspace_subscriptions s
           LEFT JOIN saas_plans p ON s.plan = p.id
@@ -537,9 +534,9 @@ export const onRequest: PagesFunction<any> = async (context) => {
             maxFileSizeMb: sub.max_file_size_mb || 100,
             msgRetentionDays: sub.msg_retention_days || 0,
             msgRetentionCount: sub.msg_retention_count || 0,
-            status: sub.status,
-            stripeSubscriptionId: sub.stripe_subscription_id || '',
-          };
+             status: sub.status,
+             stripeSubscriptionId: '',
+           };
         } else {
           // 既存のワークスペースなどでレコードが存在しない場合は、DBにデフォルト（default_saas_plan、なければ 'free'）レコードを挿入して初期化
           const defaultPlanSetting = await coreEnv.DB.prepare(

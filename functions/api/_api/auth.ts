@@ -1,6 +1,6 @@
 import type { Env } from "../[[route]]";
 import { verifyPassword, hashPassword, generateRecoveryCode } from "./setup";
-import { signJWT, verifyJWT, getJwtSecret, serializeCookie, parseCookies, getCookieOptions } from "../_utils/jwt";
+import { signJWT, verifyJWT, getJwtSecret, serializeCookie, parseCookies, getCookieOptions, verifyUserAuth } from "../_utils/jwt";
 import { sendMail, getSmtpSettings } from "../_utils/smtp";
 import { logAudit } from "../_utils/audit";
 
@@ -265,7 +265,7 @@ export async function handleChangePassword(request: Request, env: Env): Promise<
   };
 
   try {
-    const userId = request.headers.get("X-User-Id");
+    const userId = await verifyUserAuth(request, env);
     if (!userId) {
       return new Response(JSON.stringify({ error: "User unauthorized" }), {
         status: 401,
