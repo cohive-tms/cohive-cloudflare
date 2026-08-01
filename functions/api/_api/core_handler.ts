@@ -200,6 +200,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
   try {
     await ensureDatabaseInitialized(env);
+    // SQLiteの外部キー制約を有効化（ON DELETE CASCADEの動作に必要）
+    await env.DB.prepare("PRAGMA foreign_keys = ON;").run().catch(e => {
+      console.warn("Failed to enable foreign_keys pragma:", e);
+    });
   } catch (err) {
     console.error("Failed to auto-initialize database:", err);
   }

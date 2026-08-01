@@ -159,6 +159,27 @@ export async function handleDeleteGroup(
     if (!(await verifyWorkspaceMember(env, workspaceId, userId))) {
       return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
     }
+
+    // 削除権限の検証: グループリーダーまたはワークスペース管理者(admin/owner)のみ許可
+    const groupMember = await env.DB.prepare(
+      "SELECT is_leader FROM group_members WHERE group_id = ? AND user_id = ?"
+    ).bind(groupId, userId).first<{ is_leader: number }>();
+
+    const isLeader = groupMember && groupMember.is_leader === 1;
+
+    const workspaceMember = await env.DB.prepare(
+      "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+    ).bind(workspaceId, userId).first<{ role: string }>();
+
+    const isAdmin = workspaceMember && (workspaceMember.role === "admin" || workspaceMember.role === "owner");
+
+    if (!isLeader && !isAdmin) {
+      return new Response(
+        JSON.stringify({ error: "Forbidden: Only group leaders or workspace admins can delete this group." }),
+        { status: 403, headers }
+      );
+    }
+
     await env.DB.prepare("DELETE FROM groups WHERE id = ? AND workspace_id = ?").bind(groupId, workspaceId).run();
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
@@ -205,6 +226,10 @@ export async function handleCreateOrGetDm(
 
     if (!(await verifyWorkspaceMember(env, workspaceId, currentUserId))) {
       return new Response(JSON.stringify({ error: "Forbidden: You are not a member of this workspace" }), { status: 403, headers });
+    }
+
+    if (!(await verifyWorkspaceMember(env, workspaceId, targetUserId))) {
+      return new Response(JSON.stringify({ error: "Forbidden: Target user is not a member of this workspace" }), { status: 403, headers });
     }
 
     // 既存のDMチャンネルがあるか確認

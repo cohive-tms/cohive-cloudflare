@@ -1,5 +1,5 @@
 import type { Env } from "../[[route]]";
-import { verifyUserAuth, verifyWorkspaceMember } from "../_utils/jwt";
+import { verifyUserAuth, verifyWorkspaceMember, verifyChannelMember } from "../_utils/jwt";
 import { getCorsHeaders } from "../_utils/cors";
 
 
@@ -221,19 +221,50 @@ export async function handleFileDownload(request: Request, env: Env, objectKey: 
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
     }
 
-    // objectKey が workspaces/workspaceId/ で始まる場合、メンバー検証を行う (BOLA対策)
-    const keyParts = objectKey.split("/");
-    if (keyParts[0] === "workspaces" && keyParts[1]) {
-      const workspaceId = keyParts[1];
+    // filesテーブルからファイルに紐づく情報を取得する
+    const fileRecord = await env.DB.prepare(
+      "SELECT workspace_id, channel_id FROM files WHERE object_key = ?"
+    ).bind(objectKey).first<{ workspace_id: string; channel_id: string | null }>();
+
+    if (fileRecord) {
+      // ワークスペースメンバーの確認
       const member = await env.DB.prepare(
         "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
-      ).bind(workspaceId, userId).first();
+      ).bind(fileRecord.workspace_id, userId).first();
 
       if (!member) {
         return new Response(
           JSON.stringify({ error: "Forbidden: You do not have access to this workspace's files." }),
           { status: 403, headers: corsHeaders }
         );
+      }
+
+      // チャンネルIDが紐付いている場合は、そのチャンネルのアクセス権（メンバーシップ）を確認
+      if (fileRecord.channel_id) {
+        const isChanMember = await verifyChannelMember(env, fileRecord.channel_id, userId);
+        if (!isChanMember) {
+          return new Response(
+            JSON.stringify({ error: "Forbidden: You do not have access to this channel's files." }),
+            { status: 403, headers: corsHeaders }
+          );
+        }
+      }
+    } else {
+      // filesテーブルに登録されていないアバターなどのファイル
+      // objectKey が workspaces/workspaceId/ で始まる場合、メンバー検証を行う (BOLA対策)
+      const keyParts = objectKey.split("/");
+      if (keyParts[0] === "workspaces" && keyParts[1]) {
+        const workspaceId = keyParts[1];
+        const member = await env.DB.prepare(
+          "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+        ).bind(workspaceId, userId).first();
+
+        if (!member) {
+          return new Response(
+            JSON.stringify({ error: "Forbidden: You do not have access to this workspace's files." }),
+            { status: 403, headers: corsHeaders }
+          );
+        }
       }
     }
 

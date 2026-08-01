@@ -41,9 +41,11 @@ export async function handleSearchWorkspace(
       FROM messages m
       JOIN channels c ON m.channel_id = c.id
       LEFT JOIN users u ON m.user_id = u.id
-      WHERE c.workspace_id = ? AND m.content LIKE ?
+      WHERE c.workspace_id = ? 
+        AND m.content LIKE ? 
+        AND (c.is_private = 0 OR c.id IN (SELECT channel_id FROM channel_members WHERE user_id = ?))
       LIMIT 20
-    `).bind(workspaceId, searchPattern).all<any>();
+    `).bind(workspaceId, searchPattern, userId).all<any>();
 
     const { results: items } = await env.DB.prepare(`
       SELECT id, title, description, status, priority, created_at as createdAt
@@ -111,6 +113,7 @@ export async function handleGetActivities(
       FROM channels c
       JOIN workspaces w ON c.workspace_id = w.id
       WHERE c.workspace_id IN (${placeholders})
+        AND (c.is_private = 0 OR c.id IN (SELECT channel_id FROM channel_members WHERE user_id = ?))
 
       UNION ALL
 
@@ -127,6 +130,7 @@ export async function handleGetActivities(
       JOIN workspaces w ON i.workspace_id = w.id
       LEFT JOIN users u ON i.creator_id = u.id
       WHERE i.workspace_id IN (${placeholders})
+        AND (i.is_private = 0 OR i.creator_id = ? OR i.id IN (SELECT item_id FROM item_assignees WHERE user_id = ?))
 
       UNION ALL
 
@@ -142,14 +146,16 @@ export async function handleGetActivities(
       FROM files f
       JOIN workspaces w ON f.workspace_id = w.id
       LEFT JOIN users u ON f.uploader_id = u.id
+      LEFT JOIN channels c ON f.channel_id = c.id
       WHERE f.workspace_id IN (${placeholders})
+        AND (f.channel_id IS NULL OR c.is_private = 0 OR f.channel_id IN (SELECT channel_id FROM channel_members WHERE user_id = ?))
 
       ORDER BY createdAt DESC
       LIMIT 30
     `;
 
-    // 3箇所分プレースホルダーパラメータをマインドする
-    const bindParams = [...wsIds, ...wsIds, ...wsIds];
+    // プレースホルダーパラメータと userId をマインドする
+    const bindParams = [...wsIds, userId, ...wsIds, userId, userId, ...wsIds, userId];
     const { results: activities } = await env.DB.prepare(query).bind(...bindParams).all<any>();
 
     return new Response(JSON.stringify({

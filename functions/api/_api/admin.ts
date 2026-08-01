@@ -1,5 +1,5 @@
 import type { Env } from "../[[route]]";
-import { signJWT, verifyJWT, getJwtSecret, verifyUserAuth } from "../_utils/jwt";
+import { signJWT, verifyJWT, getJwtSecret, verifyUserAuth, verifyWorkspaceMember } from "../_utils/jwt";
 import { hashPassword, verifyPassword, generateRecoveryCode } from "./setup";
 import { sendMail, getSmtpSettings } from "../_utils/smtp";
 
@@ -1367,6 +1367,14 @@ export async function handlePurgeWorkspaceData(request: Request, env: Env, works
 // 27. ワークスペースブランディングの取得
 export async function handleGetWorkspaceBranding(request: Request, env: Env, workspaceId: string): Promise<Response> {
   try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+    if (!(await verifyWorkspaceMember(env, workspaceId, userId))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
+    }
+
     const branding = await env.DB.prepare(
       "SELECT * FROM workspace_brandings WHERE workspace_id = ?"
     ).bind(workspaceId).first();

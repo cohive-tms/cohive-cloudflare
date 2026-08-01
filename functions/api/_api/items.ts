@@ -393,12 +393,32 @@ export async function handleDeleteItem(
     }
 
     const item = await env.DB.prepare(
-      "SELECT workspace_id FROM items WHERE id = ?"
-    ).bind(itemId).first<{ workspace_id: string }>();
+      "SELECT workspace_id, creator_id FROM items WHERE id = ?"
+    ).bind(itemId).first<{ workspace_id: string; creator_id: string }>();
 
-    if (!item || !(await verifyWorkspaceMember(env, item.workspace_id, userId))) {
+    if (!item) {
+      return new Response(JSON.stringify({ error: "Item not found" }), { status: 404, headers });
+    }
+
+    if (!(await verifyWorkspaceMember(env, item.workspace_id, userId))) {
       return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
     }
+
+    // 作成者本人、またはワークスペース管理者（admin, owner）のみ削除を許可
+    if (item.creator_id !== userId) {
+      const member = await env.DB.prepare(
+        "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+      ).bind(item.workspace_id, userId).first<{ role: string }>();
+
+      const isAdmin = member && (member.role === "admin" || member.role === "owner");
+      if (!isAdmin) {
+        return new Response(
+          JSON.stringify({ error: "Forbidden: You cannot delete other users' items." }),
+          { status: 403, headers }
+        );
+      }
+    }
+
     await env.DB.prepare("DELETE FROM items WHERE id = ?").bind(itemId).run();
     return new Response(JSON.stringify({ success: true }), {
       status: 200,

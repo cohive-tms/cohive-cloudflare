@@ -229,16 +229,7 @@ export function getCookieOptions(
 export async function verifyUserAuth(request: Request, env: Env): Promise<string | null> {
   const url = new URL(request.url);
 
-  // 1. ヘッダーまたはクエリパラメータから userId を直接取得
-  let userId = request.headers.get("X-User-Id") || 
-               url.searchParams.get("user_id") || 
-               url.searchParams.get("userId");
-
-  if (userId) {
-    return userId;
-  }
-
-  // 2. Authorizationヘッダーまたはクエリパラメータからトークンを取得してJWT検証
+  // Authorizationヘッダーまたはクエリパラメータからトークンを取得してJWT検証
   let token = url.searchParams.get("token");
   if (!token) {
     const authHeader = request.headers.get("Authorization");
@@ -291,10 +282,22 @@ export async function verifyChannelMember(
 ): Promise<boolean> {
   try {
     const channel = await env.DB.prepare(
-      "SELECT workspace_id FROM channels WHERE id = ?"
-    ).bind(channelId).first<{ workspace_id: string }>();
+      "SELECT workspace_id, is_private FROM channels WHERE id = ?"
+    ).bind(channelId).first<{ workspace_id: string; is_private: number }>();
     if (!channel || !channel.workspace_id) return false;
-    return await verifyWorkspaceMember(env, channel.workspace_id, userId);
+
+    const isWsMember = await verifyWorkspaceMember(env, channel.workspace_id, userId);
+    if (!isWsMember) return false;
+
+    // 非公開チャンネルの場合は、channel_members テーブルでの所属確認を行う
+    if (channel.is_private === 1) {
+      const member = await env.DB.prepare(
+        "SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?"
+      ).bind(channelId, userId).first();
+      return !!member;
+    }
+
+    return true;
   } catch (e) {
     console.error("Channel membership verification failed:", e);
     return false;

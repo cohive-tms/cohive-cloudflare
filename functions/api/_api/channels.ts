@@ -691,12 +691,38 @@ export async function handleDeleteMessage(
     }
 
     const msg = await env.DB.prepare(
-      "SELECT channel_id FROM messages WHERE id = ?"
-    ).bind(messageId).first<{ channel_id: string }>();
+      "SELECT user_id, channel_id FROM messages WHERE id = ?"
+    ).bind(messageId).first<{ user_id: string; channel_id: string }>();
 
-    if (!msg || !(await verifyChannelMember(env, msg.channel_id, userId))) {
+    if (!msg) {
+      return new Response(JSON.stringify({ error: "Message not found" }), { status: 404, headers });
+    }
+
+    if (!(await verifyChannelMember(env, msg.channel_id, userId))) {
       return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
     }
+
+    // 削除権限の検証: 送信者本人、またはワークスペース管理者(admin/owner)のみ許可
+    if (msg.user_id !== userId) {
+      const channel = await env.DB.prepare(
+        "SELECT workspace_id FROM channels WHERE id = ?"
+      ).bind(msg.channel_id).first<{ workspace_id: string }>();
+
+      let isAdmin = false;
+      if (channel) {
+        const member = await env.DB.prepare(
+          "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+        ).bind(channel.workspace_id, userId).first<{ role: string }>();
+        if (member && (member.role === "admin" || member.role === "owner")) {
+          isAdmin = true;
+        }
+      }
+
+      if (!isAdmin) {
+        return new Response(JSON.stringify({ error: "Forbidden: You cannot delete other users' messages." }), { status: 403, headers });
+      }
+    }
+
     await env.DB.prepare("DELETE FROM messages WHERE id = ?").bind(messageId).run();
     return new Response(JSON.stringify({ success: true }), {
       status: 200,

@@ -212,6 +212,11 @@ export const onRequest: PagesFunction<any> = async (context) => {
   // 1. SaaS 固有のマイグレーション実行
   await runSaasMigrations(env);
 
+  // SQLiteの外部キー制約を有効化（ON DELETE CASCADEの動作に必要）
+  await env.DB.prepare("PRAGMA foreign_keys = ON;").run().catch((e: any) => {
+    console.warn("Failed to enable foreign_keys pragma in SaaS route:", e);
+  });
+
   // 2. SaaS 固有のエンドポイントルーティング (インターセプト)
   try {
     const corsHeaders = {
