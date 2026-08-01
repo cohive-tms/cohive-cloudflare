@@ -696,6 +696,18 @@ export async function handleSendMessage(
       });
     }
 
+    // レートリミット制限の適用
+    const ip = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
+    if (env.RATE_LIMITER) {
+      const { success } = await env.RATE_LIMITER.limit({ key: `msg-${userId}-${ip}` });
+      if (!success) {
+        return new Response(
+          JSON.stringify({ error: "Too many messages. Please slow down and try again later." }),
+          { status: 429, headers }
+        );
+      }
+    }
+
     const body: any = await request.json();
     const { channelId, content, parentId = null, fileUrl = null, fileName = null, fileSize = null } = body;
 

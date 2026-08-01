@@ -17,6 +17,18 @@ export async function handleFileUpload(request: Request, env: Env): Promise<Resp
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
     }
 
+    // レートリミット制限の適用
+    const ip = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
+    if (env.RATE_LIMITER) {
+      const { success } = await env.RATE_LIMITER.limit({ key: `file-up-${userId}-${ip}` });
+      if (!success) {
+        return new Response(
+          JSON.stringify({ error: "Too many file uploads. Please slow down and try again later." }),
+          { status: 429, headers }
+        );
+      }
+    }
+
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const workspaceId = formData.get("workspaceId") as string | null;
@@ -284,6 +296,10 @@ export async function handleFileDownload(request: Request, env: Env, objectKey: 
     // Content-Type を引き継ぐ
     const contentType = object.httpMetadata?.contentType || "application/octet-stream";
     headers.set("Content-Type", contentType);
+
+    // セキュリティヘッダーの追加 (Stored XSSおよびMIMEスニッフィング防止)
+    headers.set("X-Content-Type-Options", "nosniff");
+    headers.set("Content-Security-Policy", "default-src 'none'; sandbox;");
 
     // インライン表示（プレビュー）可能な拡張子かどうかをチェック
     const inlineTypes = ["image/", "video/", "audio/", "application/pdf", "text/"];

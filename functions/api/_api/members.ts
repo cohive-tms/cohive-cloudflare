@@ -68,11 +68,29 @@ export async function handleAddWorkspaceMember(
     if (!userId) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
     }
-    if (!(await verifyWorkspaceMember(env, workspaceId, userId))) {
-      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
+
+    // 招待権限の検証: ワークスペース管理者(admin/owner)のみ許可
+    const currentMember = await env.DB.prepare(
+      "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+    ).bind(workspaceId, userId).first<{ role: string }>();
+
+    if (!currentMember || (currentMember.role !== "admin" && currentMember.role !== "owner")) {
+      return new Response(JSON.stringify({ error: "Forbidden: Only workspace admins can invite new members." }), { status: 403, headers });
     }
+
     const body: any = await request.json();
-    const { email, displayName, role = 'member' } = body;
+    const { email, displayName } = body;
+    let role = body.role || 'member';
+
+    // 権限昇格対策: 新メンバーを owner に招待できるのは、自身が owner である場合のみ
+    if (role === 'owner' && currentMember.role !== 'owner') {
+      return new Response(JSON.stringify({ error: "Forbidden: Only workspace owners can invite new owners." }), { status: 403, headers });
+    }
+
+    // 不正なロール文字列のフィルタリング
+    if (role !== 'member' && role !== 'admin' && role !== 'owner') {
+      role = 'member';
+    }
 
     if (!email) {
       return new Response(JSON.stringify({ error: "Email is required" }), {
