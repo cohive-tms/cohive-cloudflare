@@ -64,15 +64,15 @@ export async function handleAddWorkspaceMember(
   const headers = getCorsHeaders(request, "POST, OPTIONS");
 
   try {
-    const userId = await verifyUserAuth(request, env);
-    if (!userId) {
+    const inviterUserId = await verifyUserAuth(request, env);
+    if (!inviterUserId) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
     }
 
     // 招待権限の検証: ワークスペース管理者(admin/owner)のみ許可
     const currentMember = await env.DB.prepare(
       "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
-    ).bind(workspaceId, userId).first<{ role: string }>();
+    ).bind(workspaceId, inviterUserId).first<{ role: string }>();
 
     if (!currentMember || (currentMember.role !== "admin" && currentMember.role !== "owner")) {
       return new Response(JSON.stringify({ error: "Forbidden: Only workspace admins can invite new members." }), { status: 403, headers });

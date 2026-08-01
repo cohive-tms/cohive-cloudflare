@@ -106,7 +106,6 @@ export async function handleAcquireDocumentLock(
     }
 
     const now = Date.now();
-    const decodedKey = decodeURIComponent(lockKey);
     const existingLock = documentLocks[decodedKey];
 
     if (existingLock && existingLock.expiresAt > now && existingLock.userId !== userId) {
