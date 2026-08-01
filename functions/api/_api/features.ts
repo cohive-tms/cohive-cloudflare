@@ -1,5 +1,5 @@
 import type { Env } from "../[[route]]";
-import { verifyUserAuth } from "../_utils/jwt";
+import { verifyUserAuth, verifyWorkspaceMember } from "../_utils/jwt";
 import { getCorsHeaders } from "../_utils/cors";
 
 
@@ -16,6 +16,14 @@ export async function handleSearchWorkspace(
   const headers = getCorsHeaders(request, "GET, OPTIONS");
 
   try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+    if (!(await verifyWorkspaceMember(env, workspaceId, userId))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
+    }
+
     const url = new URL(request.url);
     const query = url.searchParams.get("q") || "";
 
@@ -176,6 +184,9 @@ export async function handleGetCustomEmojis(
     if (!userId) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
     }
+    if (!(await verifyWorkspaceMember(env, workspaceId, userId))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
+    }
 
     const { results } = await env.DB.prepare(`
       SELECT id, code, object_key FROM custom_emojis 
@@ -220,6 +231,9 @@ export async function handleCreateCustomEmoji(
     const userId = await verifyUserAuth(request, env);
     if (!userId) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+    if (!(await verifyWorkspaceMember(env, workspaceId, userId))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
     }
 
     const formData = await request.formData();
