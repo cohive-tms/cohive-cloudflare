@@ -307,11 +307,32 @@ export async function handleUpdateItem(
     }
 
     const item = await env.DB.prepare(
-      "SELECT workspace_id FROM items WHERE id = ?"
-    ).bind(itemId).first<{ workspace_id: string }>();
+      "SELECT workspace_id, creator_id FROM items WHERE id = ?"
+    ).bind(itemId).first<{ workspace_id: string; creator_id: string }>();
 
     if (!item || !(await verifyWorkspaceMember(env, item.workspace_id, userId))) {
       return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
+    }
+
+    // 編集権限の検証: 作成者、アサイン担当者、またはワークスペース管理者（admin, owner）のみ許可
+    if (item.creator_id !== userId) {
+      const isAssignee = await env.DB.prepare(
+        "SELECT 1 FROM item_assignees WHERE item_id = ? AND user_id = ?"
+      ).bind(itemId, userId).first();
+
+      if (!isAssignee) {
+        const member = await env.DB.prepare(
+          "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+        ).bind(item.workspace_id, userId).first<{ role: string }>();
+
+        const isAdmin = member && (member.role === "admin" || member.role === "owner");
+        if (!isAdmin) {
+          return new Response(
+            JSON.stringify({ error: "Forbidden: You cannot modify other users' items." }),
+            { status: 403, headers }
+          );
+        }
+      }
     }
     const body: any = await request.json();
     const {

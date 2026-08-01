@@ -125,6 +125,31 @@ export async function handleAddChannelMember(
     if (!(await verifyChannelMember(env, channelId, userIdAuth))) {
       return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
     }
+
+    // 招待権限の検証: チャンネルが非公開の場合、招待者が該当チャンネルに所属しているか、またはワークスペース管理者(admin/owner)のみ許可
+    const channel = await env.DB.prepare(
+      "SELECT workspace_id, is_private FROM channels WHERE id = ?"
+    ).bind(channelId).first<{ workspace_id: string; is_private: number }>();
+
+    if (channel && channel.is_private === 1) {
+      const isMemberOfChannel = await env.DB.prepare(
+        "SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?"
+      ).bind(channelId, userIdAuth).first();
+
+      if (!isMemberOfChannel) {
+        const member = await env.DB.prepare(
+          "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+        ).bind(channel.workspace_id, userIdAuth).first<{ role: string }>();
+
+        const isAdmin = member && (member.role === "admin" || member.role === "owner");
+        if (!isAdmin) {
+          return new Response(
+            JSON.stringify({ error: "Forbidden: You cannot invite members to a private channel you do not belong to." }),
+            { status: 403, headers }
+          );
+        }
+      }
+    }
     const body: any = await request.json();
     const { userId } = body;
 
@@ -167,6 +192,26 @@ export async function handleRemoveChannelMember(
     if (!(await verifyChannelMember(env, channelId, userId))) {
       return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
     }
+
+    // 削除権限の検証: チャンネルが非公開かつ、他人のキックである場合、ワークスペース管理者(admin/owner)のみ許可
+    const channel = await env.DB.prepare(
+      "SELECT workspace_id, is_private FROM channels WHERE id = ?"
+    ).bind(channelId).first<{ workspace_id: string; is_private: number }>();
+
+    if (channel && channel.is_private === 1 && userId !== targetUserId) {
+      const member = await env.DB.prepare(
+        "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+      ).bind(channel.workspace_id, userId).first<{ role: string }>();
+
+      const isAdmin = member && (member.role === "admin" || member.role === "owner");
+      if (!isAdmin) {
+        return new Response(
+          JSON.stringify({ error: "Forbidden: Only workspace admins can remove other members from a private channel." }),
+          { status: 403, headers }
+        );
+      }
+    }
+
     await env.DB.prepare(
       "DELETE FROM channel_members WHERE channel_id = ? AND user_id = ?"
     ).bind(channelId, targetUserId).run();
@@ -323,6 +368,25 @@ export async function handleUpdateChannel(
     }
     if (!(await verifyChannelMember(env, channelId, userId))) {
       return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
+    }
+
+    // 設定変更の権限検証: ワークスペース管理者(admin/owner)のみ許可
+    const channel = await env.DB.prepare(
+      "SELECT workspace_id FROM channels WHERE id = ?"
+    ).bind(channelId).first<{ workspace_id: string }>();
+
+    if (channel) {
+      const member = await env.DB.prepare(
+        "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+      ).bind(channel.workspace_id, userId).first<{ role: string }>();
+
+      const isAdmin = member && (member.role === "admin" || member.role === "owner");
+      if (!isAdmin) {
+        return new Response(
+          JSON.stringify({ error: "Forbidden: Only workspace admins can modify channel settings." }),
+          { status: 403, headers }
+        );
+      }
     }
     const body: any = await request.json();
     const { name, description, isPrivate } = body;
