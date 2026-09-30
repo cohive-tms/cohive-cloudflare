@@ -23,28 +23,46 @@ export function getCorsHeaders(
         allowedOrigins.push(...extra);
       }
 
-      // ドメインが一致するか、または同一親ドメインのサブドメインである場合に許可
-      const baseDomain = url.host.replace(/^api\./, '');
+      // ドメインが一致するか、または同一親ドメインの厳密なサブドメインである場合に許可
+      const reqHost = url.hostname;
+      const originUrl = new URL(origin);
+      const originHost = originUrl.hostname;
+      const baseDomain = reqHost.replace(/^api\./, '');
+
+      const isSubdomainOfBase = baseDomain.includes('.') && 
+        !baseDomain.endsWith('.pages.dev') && 
+        !baseDomain.endsWith('.workers.dev') && 
+        originHost.endsWith('.' + baseDomain);
+
       const isAllowed = allowedOrigins.includes(origin) || 
-        (origin.startsWith("http") && (origin.endsWith(baseDomain) || origin.endsWith("." + baseDomain)));
+        originHost === reqHost || 
+        originHost === baseDomain || 
+        isSubdomainOfBase;
 
       if (isAllowed) {
         allowedOrigin = origin;
       } else {
-        allowedOrigin = allowedOrigins[0] || "http://localhost:5173";
+        allowedOrigin = "";
       }
     } catch {
-      allowedOrigin = "http://localhost:5173";
+      allowedOrigin = "";
     }
   } else {
     allowedOrigin = "*";
   }
 
-  return {
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": allowedOrigin,
-    "Access-Control-Allow-Credentials": "true",
     "Access-Control-Allow-Methods": methods,
     "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
   };
+
+  if (allowedOrigin) {
+    headers["Access-Control-Allow-Origin"] = allowedOrigin;
+    if (allowedOrigin !== "*") {
+      headers["Access-Control-Allow-Credentials"] = "true";
+    }
+  }
+
+  return headers;
 }

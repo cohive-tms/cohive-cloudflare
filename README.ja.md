@@ -149,7 +149,7 @@ flowchart TD
 4. **Identity Providers**: Google Workspace, Microsoft Entra ID, GitHub などのSSO認証をバインド。
 5. **Policy**: 許可するメールアドレスドメイン（例: `@yourcompany.com`）を指定して保存。
 
-これて、アプリケーションの手前に社内SSO認証ゲートが設置され、許可された社内人間しかアクセスできない二重防御が完了します。
+これで、アプリケーションの手前に社内SSO認証ゲートが設置され、許可された社内人間しかアクセスできない二重防御が完了します。
 
 ---
 
@@ -157,7 +157,7 @@ flowchart TD
 
 ```bash
 # クローン
-git clone https://github.com/cospace-tms/cospace-cloudflare.git
+git clone https://github.com/cohive-tms/cohive-cloudflare.git
 cd cohive-cloudflare
 
 # 依存関係インストール

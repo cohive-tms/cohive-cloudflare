@@ -153,7 +153,7 @@ Configures outgoing email for workspace invitations and notifications.
 
 ```bash
 # Clone repository
-git clone https://github.com/cospace-tms/cospace-cloudflare.git
+git clone https://github.com/cohive-tms/cohive-cloudflare.git
 cd cohive-cloudflare
 
 # Install dependencies

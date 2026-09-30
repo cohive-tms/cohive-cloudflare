@@ -39,12 +39,12 @@ import {
   handleGetSystemLimits
 } from "./_api/saas_extensions";
 
-let migrationsRun = false;
+let saasMigrationPromise: Promise<void> | null = null;
 
 async function runSaasMigrations(env: any) {
-  if (migrationsRun) return;
-
-  try {
+  if (!saasMigrationPromise) {
+    saasMigrationPromise = (async () => {
+      try {
     // SaaS用テーブル定義の自動構築
     await env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS saas_plans (
@@ -193,11 +193,21 @@ async function runSaasMigrations(env: any) {
       ('unlimited', 'Unlimited Plan', 9999, 9999, 9999999999, 1, 1, '', 0, 0, 2980, 'jpy')
     `).run();
 
-    migrationsRun = true;
-    console.log("SaaS Migrations executed successfully.");
-  } catch (err) {
-    console.error("Failed to run SaaS Migrations:", err);
+        // SQLiteの外部キー制約を有効化（初期化時に1度だけ実行）
+        await env.DB.prepare("PRAGMA foreign_keys = ON;").run().catch((e: any) => {
+          console.warn("Failed to enable foreign_keys pragma in SaaS route:", e);
+        });
+
+        console.log("SaaS Migrations executed successfully.");
+      } catch (err) {
+        console.error("Failed to run SaaS Migrations:", err);
+      }
+    })().catch(err => {
+      saasMigrationPromise = null;
+      throw err;
+    });
   }
+  return saasMigrationPromise;
 }
 
 /**
@@ -209,13 +219,8 @@ export const onRequest: PagesFunction<any> = async (context) => {
   const pathname = url.pathname;
   const method = request.method;
 
-  // 1. SaaS 固有のマイグレーション実行
+  // 1. SaaS 固有のマイグレーション実行（初期化済みの場合は即リターン）
   await runSaasMigrations(env);
-
-  // SQLiteの外部キー制約を有効化（ON DELETE CASCADEの動作に必要）
-  await env.DB.prepare("PRAGMA foreign_keys = ON;").run().catch((e: any) => {
-    console.warn("Failed to enable foreign_keys pragma in SaaS route:", e);
-  });
 
   // 2. SaaS 固有のエンドポイントルーティング (インターセプト)
   try {

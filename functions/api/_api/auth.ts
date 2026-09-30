@@ -3,16 +3,10 @@ import { verifyPassword, hashPassword, generateRecoveryCode } from "./setup";
 import { signJWT, verifyJWT, getJwtSecret, serializeCookie, parseCookies, getCookieOptions, verifyUserAuth } from "../_utils/jwt";
 import { sendMail, getSmtpSettings } from "../_utils/smtp";
 import { logAudit } from "../_utils/audit";
+import { getCorsHeaders } from "../_utils/cors";
 
 export async function handleLogin(request: Request, env: Env): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id",
-  };
+  const headers = getCorsHeaders(request, "GET, POST, OPTIONS", env);
 
   try {
     const body: any = await request.json();
@@ -255,14 +249,7 @@ export async function handleLogin(request: Request, env: Env): Promise<Response>
 }
 
 export async function handleChangePassword(request: Request, env: Env): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const customHeaders = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-User-Id",
-  };
+  const customHeaders = getCorsHeaders(request, "POST, OPTIONS", env);
 
   try {
     const userId = await verifyUserAuth(request, env);
@@ -340,14 +327,7 @@ export async function handleChangePassword(request: Request, env: Env): Promise<
 }
 
 export async function handleRefresh(request: Request, env: Env): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id",
-  };
+  const headers = getCorsHeaders(request, "GET, POST, OPTIONS", env);
 
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers });
@@ -466,14 +446,7 @@ export async function handleRefresh(request: Request, env: Env): Promise<Respons
 }
 
 export async function handleLogout(request: Request, env: Env): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id",
-  };
+  const headers = getCorsHeaders(request, "GET, POST, OPTIONS", env);
 
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers });
@@ -495,14 +468,7 @@ export async function handleLogout(request: Request, env: Env): Promise<Response
 }
 
 export async function handleVerifyMfa(request: Request, env: Env): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-  };
+  const headers = getCorsHeaders(request, "POST, OPTIONS", env);
 
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers });
@@ -668,14 +634,7 @@ async function sendLoginAlertMail(
 }
 
 export async function handleRegister(request: Request, env: Env): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-  };
+  const headers = getCorsHeaders(request, "POST, OPTIONS", env);
 
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers });
@@ -744,14 +703,7 @@ export async function handleRegister(request: Request, env: Env): Promise<Respon
  * POST /api/auth/recovery
  */
 export async function handleRecovery(request: Request, env: Env): Promise<Response> {
-  const origin = request.headers.get("Origin") || "*";
-  const headers: any = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-  };
+  const headers = getCorsHeaders(request, "POST, OPTIONS", env);
 
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers });

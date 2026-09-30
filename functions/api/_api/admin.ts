@@ -284,9 +284,6 @@ export async function handleLoginAdmin(request: Request, env: Env): Promise<Resp
       "INSERT INTO saas_admin_mfa_codes (id, admin_id, code, expires_at, attempts) VALUES (?, ?, ?, ?, 0)"
     ).bind(tempSessionId, admin.id, code, expiresAt).run();
 
-    // 開発用にコンソールに出力
-    console.log(`[SaaS Admin MFA] Code generated for ${email}: ${code} (tempSessionId: ${tempSessionId})`);
-
     // メール送信
     try {
       if (smtpSettings) {

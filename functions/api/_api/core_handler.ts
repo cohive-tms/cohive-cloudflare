@@ -1,6 +1,7 @@
 import { handleSetupStatus, handleSetupRegister } from "./setup";
 import { verifyJWT, getJwtSecret } from "../_utils/jwt";
 import { INIT_SQL } from "../_utils/schema";
+import { getCorsHeaders } from "../_utils/cors";
 import {
   handleLogin, 
   handleChangePassword, 
@@ -173,37 +174,47 @@ async function runMigrations(env: Env) {
   }
 }
 
+let coreInitPromise: Promise<void> | null = null;
+
 async function ensureDatabaseInitialized(env: Env) {
-  try {
-    await env.DB.prepare("SELECT 1 FROM users LIMIT 1").all();
-    await runMigrations(env);
-  } catch (e: any) {
-    if (e.message && (e.message.includes("no such table") || e.message.includes("does not exist"))) {
-      const cleanSql = INIT_SQL.split("\n")
-        .filter(line => !line.trim().startsWith("--"))
-        .join("\n");
+  if (!coreInitPromise) {
+    coreInitPromise = (async () => {
+      try {
+        await env.DB.prepare("SELECT 1 FROM users LIMIT 1").all();
+        await runMigrations(env);
+      } catch (e: any) {
+        if (e.message && (e.message.includes("no such table") || e.message.includes("does not exist"))) {
+          const cleanSql = INIT_SQL.split("\n")
+            .filter(line => !line.trim().startsWith("--"))
+            .join("\n");
 
-      const statements = cleanSql.split(";")
-        .map(sql => sql.trim())
-        .filter(sql => sql.length > 0)
-        .map(sql => env.DB.prepare(sql));
+          const statements = cleanSql.split(";")
+            .map(sql => sql.trim())
+            .filter(sql => sql.length > 0)
+            .map(sql => env.DB.prepare(sql));
 
-      await env.DB.batch(statements);
-      await runMigrations(env);
-    } else {
-      throw e;
-    }
+          await env.DB.batch(statements);
+          await runMigrations(env);
+        } else {
+          throw e;
+        }
+      }
+      // SQLiteの外部キー制約を有効化（初期化時に1度だけ実行）
+      await env.DB.prepare("PRAGMA foreign_keys = ON;").run().catch(e => {
+        console.warn("Failed to enable foreign_keys pragma:", e);
+      });
+    })().catch(err => {
+      coreInitPromise = null;
+      throw err;
+    });
   }
+  return coreInitPromise;
 }
 
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
   try {
     await ensureDatabaseInitialized(env);
-    // SQLiteの外部キー制約を有効化（ON DELETE CASCADEの動作に必要）
-    await env.DB.prepare("PRAGMA foreign_keys = ON;").run().catch(e => {
-      console.warn("Failed to enable foreign_keys pragma:", e);
-    });
   } catch (err) {
     console.error("Failed to auto-initialize database:", err);
   }
@@ -417,8 +428,8 @@ async function handleApiRequests(context: EventContext<Env, any, any>, origin: s
     return await handleFileDownload(request, env, objectKey);
   }
 
-  return new Response(JSON.stringify({ message: "Core route handled" }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" }
+  return new Response(JSON.stringify({ error: "Endpoint not found" }), {
+    status: 404,
+    headers: getCorsHeaders(request, "GET, POST, PUT, DELETE, OPTIONS", env)
   });
 }
