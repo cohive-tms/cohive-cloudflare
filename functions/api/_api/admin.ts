@@ -4,6 +4,7 @@ import { hashPassword, verifyPassword, generateRecoveryCode } from "./setup";
 import { sendMail, getSmtpSettings } from "../_utils/smtp";
 
 import { logAudit } from "../_utils/audit";
+import { getCorsHeaders } from "../_utils/cors";
 
 const headers = {
   "Content-Type": "application/json",
@@ -1375,6 +1376,11 @@ export async function handlePurgeWorkspaceData(request: Request, env: Env, works
 
 // 27. ワークスペースブランディングの取得
 export async function handleGetWorkspaceBranding(request: Request, env: Env, workspaceId: string): Promise<Response> {
+  const headers = getCorsHeaders(request, "GET, OPTIONS");
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers });
+  }
+
   try {
     const userId = await verifyUserAuth(request, env);
     if (!userId) {
@@ -1396,6 +1402,11 @@ export async function handleGetWorkspaceBranding(request: Request, env: Env, wor
 
 // 28. ワークスペースブランディングの更新
 export async function handleUpdateWorkspaceBranding(request: Request, env: Env, workspaceId: string): Promise<Response> {
+  const headers = getCorsHeaders(request, "PUT, OPTIONS");
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers });
+  }
+
   try {
     const userId = await verifyUserAuth(request, env);
     if (!userId) {

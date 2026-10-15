@@ -322,14 +322,23 @@ export async function handleCreateChannel(
     const now = new Date().toISOString();
 
     await env.DB.prepare(`
-      INSERT INTO channels (id, workspace_id, group_id, name, description, is_private, type, document, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'channel', '', ?, ?)
-    `).bind(channelId, workspaceId, groupId || null, name, description, isPrivate ? 1 : 0, now, now).run();
+      INSERT INTO channels (id, workspace_id, group_id, creator_id, name, description, is_private, type, document, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'channel', '', ?, ?)
+    `).bind(channelId, workspaceId, groupId || null, userId, name, description, isPrivate ? 1 : 0, now, now).run();
+
+    // チャンネル作成者をメンバーとして自動登録
+    await env.DB.prepare(`
+      INSERT OR IGNORE INTO channel_members (channel_id, user_id, created_at)
+      VALUES (?, ?, ?)
+    `).bind(channelId, userId, now).run().catch((cmErr: any) => {
+      console.warn("Failed to auto-add creator to channel_members:", cmErr);
+    });
 
     const newChannel = {
       id: channelId,
       workspaceId,
       groupId: groupId || null,
+      creatorId: userId,
       name,
       description,
       isPrivate: Boolean(isPrivate),
@@ -628,6 +637,7 @@ export async function handleGetMessages(
         m.file_url as fileUrl, 
         m.file_name as fileName, 
         m.file_size as fileSize, 
+        COALESCE(m.is_pinned, 0) as isPinned,
         m.created_at as createdAt, 
         m.updated_at as updatedAt
       FROM messages m
@@ -712,6 +722,7 @@ export async function handleGetMessages(
       fileName: m.fileName || null,
       fileSize: m.fileSize || null,
       status: 'sent',
+      isPinned: Boolean(m.isPinned),
       createdAt: m.createdAt,
       user: {
         id: m.userId,
@@ -1001,3 +1012,164 @@ export async function handleDeleteReaction(
     });
   }
 }
+
+/**
+ * メッセージのピン留め・ピン留め解除を切り替えます。
+ * POST /api/messages/:messageId/pin
+ * POST /api/messages/:messageId/unpin
+ */
+export async function handleTogglePin(
+  request: Request,
+  env: Env,
+  messageId: string,
+  action: 'pin' | 'unpin'
+): Promise<Response> {
+  const headers = getCorsHeaders(request, "POST, OPTIONS");
+
+  try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+
+    const msg = await env.DB.prepare(
+      "SELECT id, channel_id FROM messages WHERE id = ?"
+    ).bind(messageId).first<{ id: string; channel_id: string }>();
+
+    if (!msg) {
+      return new Response(JSON.stringify({ error: "Message not found" }), { status: 404, headers });
+    }
+
+    if (!(await verifyChannelMember(env, msg.channel_id, userId))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
+    }
+
+    const isPinnedVal = action === 'pin' ? 1 : 0;
+    await env.DB.prepare(
+      "UPDATE messages SET is_pinned = ?, updated_at = datetime('now') WHERE id = ?"
+    ).bind(isPinnedVal, messageId).run();
+
+    return new Response(JSON.stringify({
+      success: true,
+      data: {
+        messageId,
+        isPinned: action === 'pin',
+      }
+    }), {
+      status: 200,
+      headers,
+    });
+  } catch (error: any) {
+    console.error("Failed to toggle pin:", error);
+    return new Response(JSON.stringify({ error: error.message || "Internal Server Error" }), {
+      status: 500,
+      headers,
+    });
+  }
+}
+
+/**
+ * チャンネル内のピン留めされたメッセージ一覧を取得します。
+ * GET /api/channels/:channelId/pins
+ */
+export async function handleGetChannelPins(
+  request: Request,
+  env: Env,
+  channelId: string
+): Promise<Response> {
+  const headers = getCorsHeaders(request, "GET, OPTIONS");
+
+  try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+
+    if (!(await verifyChannelMember(env, channelId, userId))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
+    }
+
+    const { results: messages } = await env.DB.prepare(`
+      SELECT 
+        m.id, 
+        m.channel_id as channelId, 
+        m.user_id as userId, 
+        COALESCE(u.display_name, 'ユーザー') as userName, 
+        u.avatar_url as userAvatar, 
+        m.parent_id as parentId, 
+        m.content, 
+        m.file_url as fileUrl, 
+        m.file_name as fileName, 
+        m.file_size as fileSize, 
+        1 as isPinned,
+        m.created_at as createdAt, 
+        m.updated_at as updatedAt
+      FROM messages m
+      LEFT JOIN users u ON m.user_id = u.id
+      WHERE m.channel_id = ? AND m.is_pinned = 1
+      ORDER BY m.created_at DESC
+      LIMIT 100
+    `).bind(channelId).all<any>();
+
+    const messageIds = (messages || []).map((m: any) => m.id);
+    let reactionsMap: Record<string, any[]> = {};
+    if (messageIds.length > 0) {
+      const placeholders = messageIds.map(() => '?').join(',');
+      const { results: rawReactions } = await env.DB.prepare(`
+        SELECT r.id, r.message_id, r.emoji, r.user_id, COALESCE(u.display_name, 'ユーザー') as display_name
+        FROM reactions r
+        LEFT JOIN users u ON r.user_id = u.id
+        WHERE r.message_id IN (${placeholders})
+      `).bind(...messageIds).all<any>();
+
+      if (rawReactions) {
+        for (const r of rawReactions) {
+          if (!reactionsMap[r.message_id]) {
+            reactionsMap[r.message_id] = [];
+          }
+          reactionsMap[r.message_id].push({
+            id: r.id,
+            emoji: r.emoji,
+            userId: r.user_id,
+            displayName: r.display_name,
+          });
+        }
+      }
+    }
+
+    const formattedMessages = (messages || []).map((m: any) => ({
+      id: m.id,
+      channelId: m.channelId,
+      userId: m.userId,
+      parentId: m.parentId || null,
+      content: m.content || '',
+      fileUrl: m.fileUrl || null,
+      fileName: m.fileName || null,
+      fileSize: m.fileSize || null,
+      status: 'sent',
+      isPinned: true,
+      createdAt: m.createdAt,
+      user: {
+        id: m.userId,
+        displayName: m.userName || 'ユーザー',
+        avatarUrl: m.userAvatar || null,
+      },
+      reactions: reactionsMap[m.id] || [],
+    }));
+
+    return new Response(JSON.stringify({
+      success: true,
+      data: formattedMessages
+    }), {
+      status: 200,
+      headers,
+    });
+  } catch (error: any) {
+    console.error("Failed to fetch pinned messages:", error);
+    return new Response(JSON.stringify({ error: error.message || "Internal Server Error" }), {
+      status: 500,
+      headers,
+    });
+  }
+}
+

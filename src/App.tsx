@@ -229,15 +229,12 @@ export default function App() {
   const fetchSubscription = async (wsId: string) => {
     setSubscriptionLoading(true);
     try {
-      const res = await fetch(`/api/workspaces/${wsId}/subscription`);
-      if (res.ok) {
-        const data = await res.json() as any;
-        if (data.success) {
-          const sub = data.subscription || data.data;
-          if (sub) {
-            setSubscription(sub);
-            setIsWorkspaceSuspended(sub.status === 'suspended');
-          }
+      const data = await apiClient.get<any>(`/api/workspaces/${wsId}/subscription`);
+      if (data && data.success) {
+        const sub = data.subscription || data.data;
+        if (sub) {
+          setSubscription(sub);
+          setIsWorkspaceSuspended(sub.status === 'suspended');
         }
       }
     } catch (e) {

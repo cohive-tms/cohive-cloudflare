@@ -51,6 +51,7 @@ export async function handleGetWorkspaceGroups(
     const formatted = (groups || []).map((g: any) => ({
       ...g,
       isPrivate: Boolean(g.isPrivate),
+      memberCount: (membersMap[g.id] || []).length,
       members: membersMap[g.id] || []
     }));
 
@@ -258,17 +259,20 @@ export async function handleCreateOrGetDm(
       });
     }
 
-    // 相手のユーザー表示名を取得
+    // 現在のユーザーと相手のユーザー表示名を取得してカンマ区切りで結合
+    const currentUser = await env.DB.prepare("SELECT display_name FROM users WHERE id = ?").bind(currentUserId).first<{ display_name: string }>();
     const targetUser = await env.DB.prepare("SELECT display_name FROM users WHERE id = ?").bind(targetUserId).first<{ display_name: string }>();
-    const dmName = targetUser?.display_name || "DM";
+    const currentName = currentUser?.display_name || "ユーザー";
+    const targetName = targetUser?.display_name || "ユーザー";
+    const dmName = `${currentName}, ${targetName}`;
 
     const channelId = crypto.randomUUID();
     const now = new Date().toISOString();
 
     await env.DB.prepare(`
-      INSERT INTO channels (id, workspace_id, group_id, name, description, is_private, type, document, created_at, updated_at)
-      VALUES (?, ?, NULL, ?, 'DM Channel', 1, 'dm', '', ?, ?)
-    `).bind(channelId, workspaceId, dmName, now, now).run();
+      INSERT INTO channels (id, workspace_id, group_id, creator_id, name, description, is_private, type, document, created_at, updated_at)
+      VALUES (?, ?, NULL, ?, ?, 'DM Channel', 1, 'dm', '', ?, ?)
+    `).bind(channelId, workspaceId, currentUserId, dmName, now, now).run();
 
     await env.DB.prepare("INSERT INTO channel_members (channel_id, user_id, created_at) VALUES (?, ?, ?)").bind(channelId, currentUserId, now).run();
     await env.DB.prepare("INSERT INTO channel_members (channel_id, user_id, created_at) VALUES (?, ?, ?)").bind(channelId, targetUserId, now).run();
@@ -278,6 +282,7 @@ export async function handleCreateOrGetDm(
       data: {
         id: channelId,
         workspaceId,
+        creatorId: currentUserId,
         name: dmName,
         type: 'dm',
         isPrivate: true,

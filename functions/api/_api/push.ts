@@ -60,3 +60,42 @@ export async function handlePushSubscribe(request: Request, env: Env): Promise<R
     });
   }
 }
+
+/**
+ * VAPID公開鍵の取得
+ * GET /api/push/vapid-public-key
+ */
+export async function handleGetVapidPublicKey(request: Request, env: Env): Promise<Response> {
+  const headers = getCorsHeaders(request, "GET, OPTIONS");
+
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers });
+  }
+
+  try {
+    let publicKey = (env as any).VAPID_PUBLIC_KEY || "";
+    if (!publicKey) {
+      const setting = await env.DB.prepare(
+        "SELECT value FROM system_settings WHERE key = ?"
+      ).bind("vapid_public_key").first<{ value: string }>().catch(() => null);
+      if (setting && setting.value) {
+        publicKey = setting.value;
+      }
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        publicKey: publicKey || ""
+      }),
+      { status: 200, headers }
+    );
+  } catch (error: any) {
+    console.error("Failed to get VAPID public key:", error);
+    return new Response(JSON.stringify({ error: error.message || "Internal Server Error" }), {
+      status: 500,
+      headers
+    });
+  }
+}
+

@@ -29,6 +29,7 @@ export async function handleGetWorkspaceItems(
         i.id, 
         i.workspace_id as workspaceId, 
         i.creator_id as creatorId, 
+        u.display_name as creatorName,
         i.title, 
         i.description, 
         i.status, 
@@ -42,6 +43,7 @@ export async function handleGetWorkspaceItems(
         i.created_at as createdAt, 
         i.updated_at as updatedAt
       FROM items i
+      LEFT JOIN users u ON i.creator_id = u.id
       WHERE i.workspace_id = ?
         AND (i.is_private = 0 OR i.creator_id = ? OR i.id IN (SELECT item_id FROM item_assignees WHERE user_id = ?))
     `;
@@ -130,7 +132,9 @@ export async function handleGetItems(
       SELECT 
         i.id, 
         i.workspace_id as workspaceId, 
+        w.name as workspaceName,
         i.creator_id as creatorId, 
+        u.display_name as creatorName,
         i.title, 
         i.description, 
         i.status, 
@@ -144,6 +148,8 @@ export async function handleGetItems(
         i.created_at as createdAt, 
         i.updated_at as updatedAt
       FROM items i
+      JOIN workspaces w ON i.workspace_id = w.id
+      LEFT JOIN users u ON i.creator_id = u.id
       LEFT JOIN item_assignees ia ON i.id = ia.item_id
       WHERE i.creator_id = ? OR ia.user_id = ?
       GROUP BY i.id

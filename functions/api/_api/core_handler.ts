@@ -36,7 +36,9 @@ import {
   handleSendMessage, 
   handleDeleteMessage, 
   handleAddReaction,
-  handleDeleteReaction
+  handleDeleteReaction,
+  handleTogglePin,
+  handleGetChannelPins
 } from "./channels";
 import { 
   handleGetWorkspaceItems, 
@@ -48,6 +50,7 @@ import {
 import { 
   handleGetWorkspaceDocument, 
   handleUpdateWorkspaceDocument,
+  handleGetDocumentLock,
   handleAcquireDocumentLock,
   handleHeartbeatDocumentLock,
   handleReleaseDocumentLock
@@ -85,9 +88,11 @@ import {
 import {
   handleFileUpload,
   handleAvatarUpload,
-  handleFileDownload
+  handleFileDownload,
+  handleGetMediaFiles,
+  handleDeleteFile
 } from "./files";
-import { handlePushSubscribe } from "./push";
+import { handlePushSubscribe, handleGetVapidPublicKey } from "./push";
 
 export interface Env {
   DB: D1Database;
@@ -126,6 +131,40 @@ async function runMigrations(env: Env) {
     if (colErr.message && (colErr.message.includes("no such column") || colErr.message.includes("has no column"))) {
       await env.DB.prepare("ALTER TABLE login_verification_codes ADD COLUMN attempts INTEGER DEFAULT 0").run();
     }
+  }
+
+  // channels テーブルの creator_id カラムの自動マイグレーション
+  try {
+    await env.DB.prepare("SELECT creator_id FROM channels LIMIT 1").all();
+  } catch (colErr: any) {
+    if (colErr.message && (colErr.message.includes("no such column") || colErr.message.includes("has no column"))) {
+      await env.DB.prepare("ALTER TABLE channels ADD COLUMN creator_id TEXT").run();
+    }
+  }
+
+  // messages テーブルの is_pinned カラムの自動マイグレーション
+  try {
+    await env.DB.prepare("SELECT is_pinned FROM messages LIMIT 1").all();
+  } catch (colErr: any) {
+    if (colErr.message && (colErr.message.includes("no such column") || colErr.message.includes("has no column"))) {
+      await env.DB.prepare("ALTER TABLE messages ADD COLUMN is_pinned INTEGER DEFAULT 0").run();
+    }
+  }
+
+  // 既存の creator_id が未設定のチャンネルをワークスペースオーナーで補完
+  try {
+    await env.DB.prepare(`
+      UPDATE channels 
+      SET creator_id = (
+        SELECT wm.user_id 
+        FROM workspace_members wm 
+        WHERE wm.workspace_id = channels.workspace_id AND wm.role = 'owner' 
+        LIMIT 1
+      )
+      WHERE creator_id IS NULL
+    `).run();
+  } catch (updateErr) {
+    // 補完失敗時は無視
   }
 
 
@@ -300,6 +339,9 @@ async function handleApiRequests(context: EventContext<Env, any, any>, origin: s
   }
 
   // 5. Document (Wiki) & Document Locks
+  const matchDocLock = url.pathname.match(/^\/api\/document-locks\/([^\/]+)$/);
+  if (matchDocLock && method === "GET") return await handleGetDocumentLock(request, env, matchDocLock[1]);
+
   const matchDocLockAcquire = url.pathname.match(/^\/api\/document-locks\/([^\/]+)\/acquire$/);
   if (matchDocLockAcquire && method === "POST") return await handleAcquireDocumentLock(request, env, matchDocLockAcquire[1]);
 
@@ -329,6 +371,9 @@ async function handleApiRequests(context: EventContext<Env, any, any>, origin: s
   if (url.pathname === "/api/push/subscribe" && method === "POST") {
     return await handlePushSubscribe(request, env);
   }
+  if (url.pathname === "/api/push/vapid-public-key" && (method === "GET" || method === "OPTIONS")) {
+    return await handleGetVapidPublicKey(request, env);
+  }
 
   // 7. Groups & DM
   const matchGroups = url.pathname.match(/^\/api\/workspaces\/([^\/]+)\/groups$/);
@@ -348,6 +393,10 @@ async function handleApiRequests(context: EventContext<Env, any, any>, origin: s
   }
   const matchSingleMessage = url.pathname.match(/^\/api\/messages\/([^\/]+)$/);
   if (matchSingleMessage && method === "DELETE") return await handleDeleteMessage(request, env, matchSingleMessage[1]);
+  const matchPin = url.pathname.match(/^\/api\/messages\/([^\/]+)\/pin$/);
+  if (matchPin && method === "POST") return await handleTogglePin(request, env, matchPin[1], 'pin');
+  const matchUnpin = url.pathname.match(/^\/api\/messages\/([^\/]+)\/unpin$/);
+  if (matchUnpin && method === "POST") return await handleTogglePin(request, env, matchUnpin[1], 'unpin');
   const matchReaction = url.pathname.match(/^\/api\/messages\/([^\/]+)\/reactions$/);
   if (matchReaction && method === "POST") return await handleAddReaction(request, env, matchReaction[1]);
   const matchDeleteReaction = url.pathname.match(/^\/api\/messages\/([^\/]+)\/reactions\/([^\/]+)$/);
@@ -385,6 +434,8 @@ async function handleApiRequests(context: EventContext<Env, any, any>, origin: s
     if (method === "PUT") return await handleUpdateChannel(request, env, cId);
     if (method === "DELETE") return await handleDeleteChannel(request, env, cId);
   }
+  const matchChannelPins = url.pathname.match(/^\/api\/channels\/([^\/]+)\/pins$/);
+  if (matchChannelPins && method === "GET") return await handleGetChannelPins(request, env, matchChannelPins[1]);
 
   // 10. Members & Re-invite & Role
   const matchReinviteMember = url.pathname.match(/^\/api\/workspaces\/([^\/]+)\/members\/([^\/]+)\/reinvite$/);
@@ -419,7 +470,10 @@ async function handleApiRequests(context: EventContext<Env, any, any>, origin: s
   }
 
 
-  // 12. File Upload / Download
+  // 12. File Upload / Download / Media
+  if (url.pathname === "/api/media" && (method === "GET" || method === "OPTIONS")) {
+    return await handleGetMediaFiles(request, env);
+  }
   if (url.pathname === "/api/files/upload" && method === "POST") {
     return await handleFileUpload(request, env);
   }
@@ -430,6 +484,10 @@ async function handleApiRequests(context: EventContext<Env, any, any>, origin: s
   if (matchFileDownload) {
     const objectKey = decodeURIComponent(matchFileDownload[1]);
     return await handleFileDownload(request, env, objectKey);
+  }
+  const matchSingleFile = url.pathname.match(/^\/api\/files\/([^\/]+)$/);
+  if (matchSingleFile && (method === "DELETE" || method === "OPTIONS")) {
+    return await handleDeleteFile(request, env, matchSingleFile[1]);
   }
 
   return new Response(JSON.stringify({ error: "Endpoint not found" }), {

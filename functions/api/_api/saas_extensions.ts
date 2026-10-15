@@ -3,6 +3,7 @@ import { decryptText, encryptText, getEncryptionSecret } from "../_utils/smtp";
 import { logAudit } from "../_utils/audit";
 import { checkIpRestriction, verifyAdminAuth } from "./admin";
 import { verifyUserAuth, verifyWorkspaceMember } from "../_utils/jwt";
+import { getCorsHeaders } from "../_utils/cors";
 
 const headers = {
   "Content-Type": "application/json",
@@ -298,18 +299,19 @@ export async function handleGetAdminAuditLogs(request: Request, env: Env): Promi
 }
 
 export async function handleGetWorkspaceAuditLogs(request: Request, env: Env, workspaceId: string): Promise<Response> {
-  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers });
+  const reqHeaders = getCorsHeaders(request, "GET, OPTIONS");
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: reqHeaders });
 
   try {
     const userId = await verifyUserAuth(request, env);
-    if (!userId) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    if (!userId) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: reqHeaders });
 
     const member = await env.DB.prepare(
       "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
     ).bind(workspaceId, userId).first<{ role: string }>();
 
     if (!member || (member.role !== "owner" && member.role !== "group_admin")) {
-      return new Response(JSON.stringify({ error: "Forbidden: Insufficient permissions" }), { status: 403, headers });
+      return new Response(JSON.stringify({ error: "Forbidden: Insufficient permissions" }), { status: 403, headers: reqHeaders });
     }
 
     let query = `
@@ -322,16 +324,17 @@ export async function handleGetWorkspaceAuditLogs(request: Request, env: Env, wo
 
     const { results } = await env.DB.prepare(query).bind(workspaceId).all<any>();
 
-    return new Response(JSON.stringify({ success: true, data: results }), { status: 200, headers });
+    return new Response(JSON.stringify({ success: true, data: results }), { status: 200, headers: reqHeaders });
   } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers });
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: reqHeaders });
   }
 }
 
 
 // パブリック向けプラン一覧取得 API
 export async function handleGetPublicSaaSPlans(request: Request, env: Env): Promise<Response> {
-  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers });
+  const reqHeaders = getCorsHeaders(request, "GET, OPTIONS");
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: reqHeaders });
 
   try {
     const { results } = await env.DB.prepare(`
@@ -352,9 +355,9 @@ export async function handleGetPublicSaaSPlans(request: Request, env: Env): Prom
       ORDER BY price_amount ASC
     `).all();
 
-    return new Response(JSON.stringify({ success: true, plans: results }), { status: 200, headers });
+    return new Response(JSON.stringify({ success: true, plans: results }), { status: 200, headers: reqHeaders });
   } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers });
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: reqHeaders });
   }
 }
 
@@ -363,12 +366,7 @@ export async function handleGetPublicSaaSPlans(request: Request, env: Env): Prom
  * GET /api/workspaces/:workspaceId/subscription
  */
 export async function handleGetWorkspaceSubscription(request: Request, env: Env, workspaceId: string): Promise<Response> {
-  const reqHeaders = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Workspace-Id, X-User-Id",
-  };
+  const reqHeaders = getCorsHeaders(request, "GET, OPTIONS");
 
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: reqHeaders });
@@ -482,12 +480,7 @@ export async function handleGetWorkspaceSubscription(request: Request, env: Env,
 
 // システム全体のデフォルト制限値を取得する API ハンドラー
 export async function handleGetSystemLimits(request: Request, env: Env): Promise<Response> {
-  const systemHeaders = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  };
+  const systemHeaders = getCorsHeaders(request, "GET, OPTIONS");
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: systemHeaders });
 
   try {

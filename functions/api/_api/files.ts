@@ -364,3 +364,146 @@ export async function handleFileDownload(request: Request, env: Env, objectKey: 
     });
   }
 }
+
+/**
+ * メディアファイル一覧の取得
+ * GET /api/media?workspaceId=...&channelId=...&fileType=...
+ */
+export async function handleGetMediaFiles(request: Request, env: Env): Promise<Response> {
+  const headers = getCorsHeaders(request, "GET, OPTIONS");
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers });
+
+  try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+    const url = new URL(request.url);
+    const workspaceId = url.searchParams.get("workspaceId");
+    if (!workspaceId) return new Response(JSON.stringify({ error: "workspaceId is required" }), { status: 400, headers });
+
+    if (!(await verifyWorkspaceMember(env, workspaceId, userId))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
+    }
+
+    const channelId = url.searchParams.get("channelId");
+    const fileType = url.searchParams.get("fileType");
+
+    let query = `
+      SELECT 
+        f.id,
+        f.workspace_id,
+        f.channel_id,
+        f.message_id,
+        f.uploader_id,
+        f.file_name,
+        f.object_key,
+        f.file_size,
+        f.content_type,
+        f.is_private,
+        f.created_at,
+        u.display_name as uploader_name,
+        c.name as channel_name
+      FROM files f
+      LEFT JOIN users u ON f.uploader_id = u.id
+      LEFT JOIN channels c ON f.channel_id = c.id
+      WHERE f.workspace_id = ?
+        AND (
+          f.channel_id IS NULL 
+          OR c.is_private = 0 
+          OR f.channel_id IN (SELECT channel_id FROM channel_members WHERE user_id = ?)
+        )
+        AND (
+          f.is_private = 0 
+          OR f.uploader_id = ?
+        )
+    `;
+    const params: any[] = [workspaceId, userId, userId];
+
+    if (channelId) {
+      query += ` AND f.channel_id = ?`;
+      params.push(channelId);
+    }
+
+    if (fileType) {
+      if (fileType === "image") {
+        query += ` AND f.content_type LIKE 'image/%'`;
+      } else if (fileType === "video") {
+        query += ` AND f.content_type LIKE 'video/%'`;
+      } else if (fileType === "document") {
+        query += ` AND (f.content_type LIKE 'application/%' OR f.content_type LIKE 'text/%')`;
+      }
+    }
+
+    query += ` ORDER BY f.created_at DESC LIMIT 200`;
+
+    const { results } = await env.DB.prepare(query).bind(...params).all<any>();
+
+    return new Response(JSON.stringify({
+      success: true,
+      files: results || []
+    }), { status: 200, headers });
+  } catch (error: any) {
+    console.error("Failed to fetch media files:", error);
+    return new Response(JSON.stringify({ error: error.message || "Internal Server Error" }), {
+      status: 500,
+      headers
+    });
+  }
+}
+
+/**
+ * ファイルの削除
+ * DELETE /api/files/:fileId
+ */
+export async function handleDeleteFile(request: Request, env: Env, fileId: string): Promise<Response> {
+  const headers = getCorsHeaders(request, "DELETE, OPTIONS");
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers });
+
+  try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+    const file = await env.DB.prepare(
+      "SELECT * FROM files WHERE id = ?"
+    ).bind(fileId).first<any>();
+
+    if (!file) {
+      return new Response(JSON.stringify({ error: "File not found" }), { status: 404, headers });
+    }
+
+    if (!(await verifyWorkspaceMember(env, file.workspace_id, userId))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
+    }
+
+    // 削除権限: アップロード者本人、またはワークスペース管理者（owner/admin）
+    const member = await env.DB.prepare(
+      "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+    ).bind(file.workspace_id, userId).first<{ role: string }>();
+
+    const isAdmin = member && (member.role === "owner" || member.role === "admin");
+    if (file.uploader_id !== userId && !isAdmin) {
+      return new Response(JSON.stringify({ error: "Forbidden: You cannot delete this file" }), { status: 403, headers });
+    }
+
+    // R2からオブジェクト削除
+    if (file.object_key) {
+      await env.BUCKET.delete(file.object_key).catch((err: any) => {
+        console.warn("Failed to delete R2 object:", err);
+      });
+    }
+
+    // DBから削除
+    await env.DB.prepare("DELETE FROM files WHERE id = ?").bind(fileId).run();
+
+    return new Response(JSON.stringify({
+      success: true,
+      message: "File deleted successfully"
+    }), { status: 200, headers });
+  } catch (error: any) {
+    console.error("Failed to delete file:", error);
+    return new Response(JSON.stringify({ error: error.message || "Internal Server Error" }), {
+      status: 500,
+      headers
+    });
+  }
+}

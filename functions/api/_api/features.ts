@@ -109,9 +109,16 @@ export async function handleGetActivities(
         c.name as title,
         COALESCE(c.description, '') as content,
         c.created_at as createdAt,
-        NULL as userName
+        COALESCE(u.display_name, (
+          SELECT u2.display_name 
+          FROM workspace_members wm 
+          JOIN users u2 ON wm.user_id = u2.id 
+          WHERE wm.workspace_id = c.workspace_id AND wm.role = 'owner' 
+          LIMIT 1
+        )) as userName
       FROM channels c
       JOIN workspaces w ON c.workspace_id = w.id
+      LEFT JOIN users u ON c.creator_id = u.id
       WHERE c.workspace_id IN (${placeholders})
         AND (c.is_private = 0 OR c.id IN (SELECT channel_id FROM channel_members WHERE user_id = ?))
 

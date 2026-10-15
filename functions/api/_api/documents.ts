@@ -1,5 +1,5 @@
 import type { Env } from "../[[route]]";
-import { verifyUserAuth, verifyWorkspaceMember } from "../_utils/jwt";
+import { verifyUserAuth, verifyWorkspaceMember, verifyChannelMember } from "../_utils/jwt";
 import { getCorsHeaders } from "../_utils/cors";
 
 /**
@@ -83,6 +83,81 @@ export async function handleUpdateWorkspaceDocument(
 // インメモリの排他ロック簡易キャッシュ構造
 const documentLocks: Record<string, { userId: string; userName: string; expiresAt: number }> = {};
 
+function parseLockKey(decodedKey: string): { type: 'workspace' | 'channel' | 'unknown'; id: string } {
+  if (decodedKey.startsWith("workspace:")) {
+    return { type: 'workspace', id: decodedKey.replace("workspace:", "") };
+  }
+  if (decodedKey.startsWith("channel:")) {
+    return { type: 'channel', id: decodedKey.replace("channel:", "") };
+  }
+  return { type: 'unknown', id: decodedKey };
+}
+
+async function verifyLockAccess(env: Env, decodedKey: string, userId: string): Promise<boolean> {
+  const { type, id } = parseLockKey(decodedKey);
+  if (type === 'workspace') {
+    return await verifyWorkspaceMember(env, id, userId);
+  } else if (type === 'channel') {
+    return await verifyChannelMember(env, id, userId);
+  }
+  return await verifyWorkspaceMember(env, id, userId);
+}
+
+/**
+ * ドキュメント編集権の排他ロック状態を取得します。
+ * GET /api/document-locks/:key
+ */
+export async function handleGetDocumentLock(
+  request: Request,
+  env: Env,
+  lockKey: string
+): Promise<Response> {
+  const headers = getCorsHeaders(request, "GET, OPTIONS");
+
+  try {
+    const userId = await verifyUserAuth(request, env);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    }
+
+    const decodedKey = decodeURIComponent(lockKey);
+    if (!(await verifyLockAccess(env, decodedKey, userId))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
+    }
+
+    const now = Date.now();
+    const existingLock = documentLocks[decodedKey];
+
+    if (existingLock && existingLock.expiresAt > now) {
+      return new Response(JSON.stringify({
+        success: true,
+        isLocked: true,
+        lockedByUserId: existingLock.userId,
+        lockedByUserName: existingLock.userName,
+        expiresAt: existingLock.expiresAt,
+      }), {
+        status: 200,
+        headers,
+      });
+    }
+
+    // ロックなし、または有効期限切れ
+    return new Response(JSON.stringify({
+      success: true,
+      isLocked: false,
+    }), {
+      status: 200,
+      headers,
+    });
+  } catch (error: any) {
+    console.error("Failed to get document lock:", error);
+    return new Response(JSON.stringify({ error: error.message || "Internal Server Error" }), {
+      status: 500,
+      headers,
+    });
+  }
+}
+
 /**
  * ドキュメント編集権の排他ロックを取得します。
  * POST /api/document-locks/:key/acquire
@@ -101,7 +176,7 @@ export async function handleAcquireDocumentLock(
     }
 
     const decodedKey = decodeURIComponent(lockKey);
-    if (!(await verifyWorkspaceMember(env, decodedKey, userId))) {
+    if (!(await verifyLockAccess(env, decodedKey, userId))) {
       return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
     }
 
@@ -112,7 +187,8 @@ export async function handleAcquireDocumentLock(
       return new Response(JSON.stringify({
         success: false,
         error: `現在 ${existingLock.userName} が編集中のためロックされています`,
-        lockedByUserName: existingLock.userName
+        lockedByUserName: existingLock.userName,
+        lockedByUserId: existingLock.userId,
       }), {
         status: 200,
         headers,
@@ -162,7 +238,7 @@ export async function handleHeartbeatDocumentLock(
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
     }
     const decodedKey = decodeURIComponent(lockKey);
-    if (!(await verifyWorkspaceMember(env, decodedKey, userId))) {
+    if (!(await verifyLockAccess(env, decodedKey, userId))) {
       return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
     }
     if (documentLocks[decodedKey]) {
@@ -198,7 +274,7 @@ export async function handleReleaseDocumentLock(
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
     }
     const decodedKey = decodeURIComponent(lockKey);
-    if (!(await verifyWorkspaceMember(env, decodedKey, userId))) {
+    if (!(await verifyLockAccess(env, decodedKey, userId))) {
       return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers });
     }
     delete documentLocks[decodedKey];

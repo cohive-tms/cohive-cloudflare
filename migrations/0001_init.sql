@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS channels (
     id TEXT PRIMARY KEY,
     workspace_id TEXT NOT NULL,
     group_id TEXT REFERENCES groups(id) ON DELETE SET NULL,
+    creator_id TEXT REFERENCES users(id) ON DELETE SET NULL,
     name TEXT NOT NULL,
     description TEXT,
     is_private INTEGER DEFAULT 0 CHECK (is_private IN (0, 1)),

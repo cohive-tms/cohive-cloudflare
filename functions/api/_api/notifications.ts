@@ -24,19 +24,36 @@ export async function handleGetNotifications(
 
     try {
       const { results: notifications } = await env.DB.prepare(`
-        SELECT id, user_id as userId, workspace_id as workspaceId, type, title, message, link_url as linkUrl, is_read as isRead, created_at as createdAt
-        FROM notifications
-        WHERE user_id = ?
-        ORDER BY created_at DESC
+        SELECT 
+          n.id, 
+          n.user_id as userId, 
+          n.workspace_id as workspaceId, 
+          w.name as workspaceName,
+          n.sender_id as senderId,
+          u.display_name as senderName,
+          n.type, 
+          n.title, 
+          n.content,
+          n.content as message,
+          n.link_url as linkUrl, 
+          n.is_read as isRead, 
+          n.is_archived as isArchived, 
+          n.created_at as createdAt
+        FROM notifications n
+        LEFT JOIN workspaces w ON n.workspace_id = w.id
+        LEFT JOIN users u ON n.sender_id = u.id
+        WHERE n.user_id = ?
+        ORDER BY n.created_at DESC
         LIMIT 100
       `).bind(userId).all<any>();
 
       const formatted = (notifications || []).map((n: any) => ({
         ...n,
-        isRead: Boolean(n.isRead),
+        isRead: (n.isRead === 1 || n.isRead === true) ? 1 : 0,
+        isArchived: (n.isArchived === 1 || n.isArchived === true) ? 1 : 0,
       }));
 
-      const unreadCount = formatted.filter((n: any) => !n.isRead).length;
+      const unreadCount = formatted.filter((n: any) => n.isRead === 0).length;
 
       return new Response(JSON.stringify({
         success: true,

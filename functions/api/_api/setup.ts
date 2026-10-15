@@ -220,14 +220,19 @@ export async function handleSetupRegister(request: Request, env: Env): Promise<R
     ).bind(workspaceId, userId);
 
     const insertChannel = env.DB.prepare(
-      "INSERT INTO channels (id, workspace_id, name, description, is_private, created_at, updated_at) VALUES (?, ?, 'general', '全メンバーが参加するデフォルトのチャンネルです', 0, datetime('now'), datetime('now'))"
-    ).bind(defaultChannelId, workspaceId);
+      "INSERT INTO channels (id, workspace_id, creator_id, name, description, is_private, created_at, updated_at) VALUES (?, ?, ?, 'general', '全メンバーが参加するデフォルトのチャンネルです', 0, datetime('now'), datetime('now'))"
+    ).bind(defaultChannelId, workspaceId, userId);
+
+    const insertChannelMember = env.DB.prepare(
+      "INSERT INTO channel_members (channel_id, user_id, created_at) VALUES (?, ?, datetime('now'))"
+    ).bind(defaultChannelId, userId);
 
     await env.DB.batch([
       insertWorkspace,
       insertUser,
       insertMember,
-      insertChannel
+      insertChannel,
+      insertChannelMember
     ]);
 
     let secret = "";
