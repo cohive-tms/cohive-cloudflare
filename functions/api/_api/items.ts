@@ -43,9 +43,10 @@ export async function handleGetWorkspaceItems(
         i.updated_at as updatedAt
       FROM items i
       WHERE i.workspace_id = ?
+        AND (i.is_private = 0 OR i.creator_id = ? OR i.id IN (SELECT item_id FROM item_assignees WHERE user_id = ?))
     `;
 
-    const params: any[] = [workspaceId];
+    const params: any[] = [workspaceId, userId, userId];
     if (channelId) {
       sql += ` AND (i.tags LIKE ? OR i.tags LIKE ?)`;
       params.push(`%channel:${channelId}%`, `%${channelId}%`);

@@ -42,17 +42,29 @@ export async function handleFileUpload(request: Request, env: Env): Promise<Resp
       return new Response(JSON.stringify({ error: "Forbidden: You do not have access to this workspace" }), { status: 403, headers });
     }
 
-    // 容量制限チェック（SaaSプランの上限）
+    // 容量制限および拡張子制限チェック（SaaSプランの上限）
     let maxFileSizeMb = 100; // デフォルト100MB
+    let allowedExtensionsStr = "";
+    let mediaEnabled = true;
+
     if ((env as any).SAAS_LIMITS) {
       try {
         const sub = await (env as any).SAAS_LIMITS.getWorkspaceSubscriptionPlan({ DB: env.DB, SAAS_LIMITS: (env as any).SAAS_LIMITS }, workspaceId);
-        if (sub && sub.maxFileSizeMb) {
-          maxFileSizeMb = sub.maxFileSizeMb;
+        if (sub) {
+          if (sub.maxFileSizeMb) maxFileSizeMb = sub.maxFileSizeMb;
+          if (sub.mediaEnabled !== undefined) mediaEnabled = sub.mediaEnabled;
+          if (sub.allowedExtensions) allowedExtensionsStr = sub.allowedExtensions;
         }
       } catch (limitErr) {
         console.warn("Failed to check SaaS limits during upload:", limitErr);
       }
+    }
+
+    if (!mediaEnabled) {
+      return new Response(
+        JSON.stringify({ error: "File upload is disabled for this workspace plan." }),
+        { status: 403, headers }
+      );
     }
 
     if (file.size > maxFileSizeMb * 1024 * 1024) {
@@ -64,6 +76,19 @@ export async function handleFileUpload(request: Request, env: Env): Promise<Resp
 
     const fileId = crypto.randomUUID();
     const fileName = file.name;
+
+    // プランで許可された拡張子の検証
+    if (allowedExtensionsStr && allowedExtensionsStr.trim()) {
+      const allowedList = allowedExtensionsStr.split(',').map(e => e.trim().toLowerCase().replace(/^\./, ''));
+      const ext = fileName.includes('.') ? fileName.split('.').pop()?.toLowerCase() || '' : '';
+      if (!allowedList.includes(ext)) {
+        return new Response(
+          JSON.stringify({ error: `File extension .${ext} is not allowed.` }),
+          { status: 400, headers }
+        );
+      }
+    }
+
     const contentType = file.type || "application/octet-stream";
     const fileSize = file.size;
 
@@ -150,6 +175,15 @@ export async function handleAvatarUpload(request: Request, env: Env): Promise<Re
     // アバター容量制限（5MB）
     if (file.size > 5 * 1024 * 1024) {
       return new Response(JSON.stringify({ error: "Avatar size exceeds the limit of 5MB" }), { status: 400, headers });
+    }
+
+    // アバター画像形式の検証
+    const allowedAvatarMimes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    const ext = file.name.includes(".") ? file.name.split(".").pop()?.toLowerCase() || "" : "";
+    const allowedAvatarExts = ["jpg", "jpeg", "png", "webp", "gif"];
+
+    if (!allowedAvatarMimes.includes(file.type) || !allowedAvatarExts.includes(ext)) {
+      return new Response(JSON.stringify({ error: "Only image files (JPEG, PNG, WebP, GIF) are allowed for avatars" }), { status: 400, headers });
     }
 
     const fileId = crypto.randomUUID();

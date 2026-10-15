@@ -34,8 +34,12 @@ export async function handleGetWorkspaceChannels(
         created_at as createdAt
       FROM channels 
       WHERE workspace_id = ?
+        AND (
+          (type = 'channel' AND is_private = 0)
+          OR id IN (SELECT channel_id FROM channel_members WHERE user_id = ?)
+        )
       ORDER BY created_at ASC
-    `).bind(workspaceId).all<any>();
+    `).bind(workspaceId, userId).all<any>();
 
     const mapped = (results || []).map((c: any) => ({
       ...c,
@@ -643,6 +647,21 @@ export async function handleGetMessages(
       paramsArr.push(since);
     }
 
+    // SaaSプラン制限: 閲覧可能な保持期間（日数）の適用
+    if (env.SAAS_LIMITS && typeof env.SAAS_LIMITS.getMessageFilterDays === "function") {
+      try {
+        const filterDays = await env.SAAS_LIMITS.getMessageFilterDays(env, channelId);
+        if (filterDays > 0) {
+          const minDate = new Date();
+          minDate.setDate(minDate.getDate() - filterDays);
+          sql += ` AND m.created_at >= ?`;
+          paramsArr.push(minDate.toISOString());
+        }
+      } catch (limitErr) {
+        console.warn("Failed to apply getMessageFilterDays in handleGetMessages:", limitErr);
+      }
+    }
+
     sql += ` ORDER BY m.created_at ASC LIMIT ?`;
     paramsArr.push(limit);
 
@@ -770,6 +789,13 @@ export async function handleSendMessage(
       INSERT INTO messages (id, channel_id, user_id, parent_id, content, file_url, file_name, file_size, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(messageId, channelId, userId, parentId || null, content || '', fileUrl, fileName, fileSize, now, now).run();
+
+    // SaaSプラン制限: 保持期間・件数制限を超えた古いメッセージの自動クリーンアップ
+    if (env.SAAS_LIMITS && typeof env.SAAS_LIMITS.checkAndCleanupMessagesLimit === "function") {
+      env.SAAS_LIMITS.checkAndCleanupMessagesLimit(env, channelId).catch((err: any) => {
+        console.warn("Failed to execute checkAndCleanupMessagesLimit in handleSendMessage:", err);
+      });
+    }
 
     return new Response(JSON.stringify({
       success: true,

@@ -5,6 +5,16 @@ import { sendMail, getSmtpSettings } from "../_utils/smtp";
 import { logAudit } from "../_utils/audit";
 import { getCorsHeaders } from "../_utils/cors";
 
+function validatePasswordComplexity(password: string): boolean {
+  const hasUpperCase = /[A-Z]/.test(password);
+  const hasLowerCase = /[a-z]/.test(password);
+  const hasNumbers = /\d/.test(password);
+  const hasNonalphas = /[^A-Za-z0-9]/.test(password);
+  return password.length >= 8 && hasUpperCase && hasLowerCase && hasNumbers && hasNonalphas;
+}
+
+const PASSWORD_POLICY_ERROR = "Password must be at least 8 characters long and contain uppercase, lowercase, numbers, and symbols.";
+
 export async function handleLogin(request: Request, env: Env): Promise<Response> {
   const headers = getCorsHeaders(request, "GET, POST, OPTIONS", env);
 
@@ -270,13 +280,8 @@ export async function handleChangePassword(request: Request, env: Env): Promise<
       });
     }
 
-    const hasUpperCase = /[A-Z]/.test(newPassword);
-    const hasLowerCase = /[a-z]/.test(newPassword);
-    const hasNumbers = /\d/.test(newPassword);
-    const hasNonalphas = /[^A-Za-z0-9]/.test(newPassword);
-
-    if (newPassword.length < 8 || !(hasUpperCase && hasLowerCase && hasNumbers && hasNonalphas)) {
-      return new Response(JSON.stringify({ error: "New password must be at least 8 characters long and contain uppercase, lowercase, numbers, and symbols." }), {
+    if (!validatePasswordComplexity(newPassword)) {
+      return new Response(JSON.stringify({ error: PASSWORD_POLICY_ERROR }), {
         status: 400,
         headers: customHeaders,
       });
@@ -651,8 +656,8 @@ export async function handleRegister(request: Request, env: Env): Promise<Respon
       });
     }
 
-    if (password.length < 8) {
-      return new Response(JSON.stringify({ error: "Password must be at least 8 characters long" }), {
+    if (!validatePasswordComplexity(password)) {
+      return new Response(JSON.stringify({ error: PASSWORD_POLICY_ERROR }), {
         status: 400,
         headers,
       });
@@ -732,8 +737,8 @@ export async function handleRecovery(request: Request, env: Env): Promise<Respon
       });
     }
 
-    if (newPassword.length < 8) {
-      return new Response(JSON.stringify({ error: "Password must be at least 8 characters long" }), {
+    if (!validatePasswordComplexity(newPassword)) {
+      return new Response(JSON.stringify({ error: PASSWORD_POLICY_ERROR }), {
         status: 400,
         headers,
       });

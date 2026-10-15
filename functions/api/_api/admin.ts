@@ -1313,14 +1313,20 @@ export async function handlePurgeWorkspaceData(request: Request, env: Env, works
     try {
       const storage = (env as any).STORAGE || (env as any).R2 || (env as any).BUCKET;
       if (storage) {
-        // A. プレフィックス workspaces/{workspaceId}/ 以下の全オブジェクトを一括削除
+        // A. プレフィックス workspaces/{workspaceId}/ 以下の全オブジェクトをカーソル付きループで一括削除 (1000件超対応)
         const prefix = `workspaces/${workspaceId}/`;
-        const listed = await storage.list({ prefix }).catch(() => null);
-        if (listed && listed.objects) {
-          for (const obj of listed.objects) {
-            await storage.delete(obj.key).catch(() => {});
+        let cursor: string | undefined = undefined;
+        do {
+          const listed: any = await storage.list({ prefix, cursor }).catch(() => null);
+          if (listed && listed.objects) {
+            for (const obj of listed.objects) {
+              await storage.delete(obj.key).catch(() => {});
+            }
+            cursor = listed.truncated ? listed.cursor : undefined;
+          } else {
+            break;
           }
-        }
+        } while (cursor);
 
         // B. 旧形式で保存されていた DBの object_key レコードも念のため個別削除
         const { results: fileRecords } = await env.DB.prepare(
@@ -1342,9 +1348,15 @@ export async function handlePurgeWorkspaceData(request: Request, env: Env, works
     // 2. D1 関連レコードの完全削除
     await env.DB.batch([
       env.DB.prepare("DELETE FROM files WHERE workspace_id = ?").bind(workspaceId),
+      env.DB.prepare("DELETE FROM custom_emojis WHERE workspace_id = ?").bind(workspaceId),
+      env.DB.prepare("DELETE FROM notifications WHERE workspace_id = ?").bind(workspaceId),
+      env.DB.prepare("DELETE FROM reactions WHERE message_id IN (SELECT m.id FROM messages m JOIN channels c ON m.channel_id = c.id WHERE c.workspace_id = ?)").bind(workspaceId),
       env.DB.prepare("DELETE FROM messages WHERE channel_id IN (SELECT id FROM channels WHERE workspace_id = ?)").bind(workspaceId),
       env.DB.prepare("DELETE FROM channel_members WHERE channel_id IN (SELECT id FROM channels WHERE workspace_id = ?)").bind(workspaceId),
       env.DB.prepare("DELETE FROM channels WHERE workspace_id = ?").bind(workspaceId),
+      env.DB.prepare("DELETE FROM group_members WHERE group_id IN (SELECT id FROM groups WHERE workspace_id = ?)").bind(workspaceId),
+      env.DB.prepare("DELETE FROM groups WHERE workspace_id = ?").bind(workspaceId),
+      env.DB.prepare("DELETE FROM item_assignees WHERE item_id IN (SELECT id FROM items WHERE workspace_id = ?)").bind(workspaceId),
       env.DB.prepare("DELETE FROM items WHERE workspace_id = ?").bind(workspaceId),
       env.DB.prepare("DELETE FROM workspace_members WHERE workspace_id = ?").bind(workspaceId),
       env.DB.prepare("DELETE FROM workspace_subscriptions WHERE workspace_id = ?").bind(workspaceId),

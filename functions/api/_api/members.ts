@@ -250,14 +250,45 @@ export async function handleUpdateMemberRole(
     if (!member || (member.role !== 'owner' && member.role !== 'admin')) {
       return new Response(JSON.stringify({ error: "Forbidden: Only owners or admins can change member roles" }), { status: 403, headers });
     }
+    const ALLOWED_ROLES = ['owner', 'admin', 'group_admin', 'member', 'guest'];
     const body: any = await request.json();
     const { role } = body;
 
-    if (!role) {
-      return new Response(JSON.stringify({ error: "Role is required" }), {
+    if (!role || !ALLOWED_ROLES.includes(role)) {
+      return new Response(JSON.stringify({ error: `Invalid role. Allowed roles: ${ALLOWED_ROLES.join(', ')}` }), {
         status: 400,
         headers,
       });
+    }
+
+    // ターゲットユーザーの現在のロールを取得
+    const targetMember = await env.DB.prepare(
+      "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+    ).bind(workspaceId, targetUserId).first<{ role: string }>();
+
+    if (!targetMember) {
+      return new Response(JSON.stringify({ error: "Target member not found in workspace" }), { status: 404, headers });
+    }
+
+    // 権限昇格対策: 新メンバーを owner にできるのは現在の owner のみ
+    if (role === 'owner' && member.role !== 'owner') {
+      return new Response(JSON.stringify({ error: "Forbidden: Only workspace owners can promote members to owner." }), { status: 403, headers });
+    }
+
+    // オーナー保護: owner のロールを変更できるのは owner 本人のみ (admin は不可)
+    if (targetMember.role === 'owner' && member.role !== 'owner') {
+      return new Response(JSON.stringify({ error: "Forbidden: Admin cannot change the role of an owner." }), { status: 403, headers });
+    }
+
+    // ラストオーナー保護: 最後の1人のオーナーが自分または他のオーナーのロールを剥奪することを防止
+    if (targetMember.role === 'owner' && role !== 'owner') {
+      const { count: ownerCount } = await env.DB.prepare(
+        "SELECT COUNT(*) as count FROM workspace_members WHERE workspace_id = ? AND role = 'owner'"
+      ).bind(workspaceId).first<{ count: number }>() || { count: 0 };
+
+      if (ownerCount <= 1) {
+        return new Response(JSON.stringify({ error: "Cannot demote the last owner of the workspace." }), { status: 400, headers });
+      }
     }
 
     await env.DB.prepare(`
@@ -304,6 +335,30 @@ export async function handleRemoveMember(
     if (!member || (userId !== targetUserId && member.role !== 'owner' && member.role !== 'admin')) {
       return new Response(JSON.stringify({ error: "Forbidden: Permission denied" }), { status: 403, headers });
     }
+
+    // ターゲットユーザーのロール確認
+    const targetMember = await env.DB.prepare(
+      "SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+    ).bind(workspaceId, targetUserId).first<{ role: string }>();
+
+    if (targetMember) {
+      // オーナー保護: admin が owner を削除することは不可
+      if (targetMember.role === 'owner' && member.role !== 'owner' && userId !== targetUserId) {
+        return new Response(JSON.stringify({ error: "Forbidden: Only workspace owners can remove an owner." }), { status: 403, headers });
+      }
+
+      // ラストオーナー保護: 最後の1人のオーナーが脱退・削除されることを防止
+      if (targetMember.role === 'owner') {
+        const { count: ownerCount } = await env.DB.prepare(
+          "SELECT COUNT(*) as count FROM workspace_members WHERE workspace_id = ? AND role = 'owner'"
+        ).bind(workspaceId).first<{ count: number }>() || { count: 0 };
+
+        if (ownerCount <= 1) {
+          return new Response(JSON.stringify({ error: "Cannot remove the last owner of the workspace." }), { status: 400, headers });
+        }
+      }
+    }
+
     await env.DB.prepare(
       "DELETE FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
     ).bind(workspaceId, targetUserId).run();

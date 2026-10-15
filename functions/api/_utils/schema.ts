@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
 CREATE TABLE IF NOT EXISTS workspace_members (
     workspace_id TEXT NOT NULL,
     user_id TEXT NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('owner', 'group_admin', 'member', 'guest')),
+    role TEXT NOT NULL CHECK (role IN ('owner', 'admin', 'group_admin', 'member', 'guest')),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (workspace_id, user_id),
@@ -223,6 +223,7 @@ CREATE TABLE IF NOT EXISTS login_verification_codes (
     user_id TEXT NOT NULL,
     code TEXT NOT NULL,
     expires_at DATETIME NOT NULL,
+    attempts INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );

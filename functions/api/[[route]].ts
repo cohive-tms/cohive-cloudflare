@@ -28,6 +28,7 @@ import {
   handleUpdateAdminLanguage
 } from "./_api/admin";
 import { getSmtpSettings, saveSmtpSettings, deleteSmtpSettings, sendMail } from "./_utils/smtp";
+import { getCorsHeaders } from "./_utils/cors";
 import {
   handleGetSaaSPlans,
   handleCreateSaaSPlan,
@@ -224,12 +225,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
 
   // 2. SaaS 固有のエンドポイントルーティング (インターセプト)
   try {
-    const corsHeaders = {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-    };
+    const corsHeaders = getCorsHeaders(request, "GET, POST, PUT, DELETE, OPTIONS", env);
 
     // ワークスペース一時停止（suspended）アクセス制限インターセプター
     const targetWorkspaceId = request.headers.get("X-Workspace-Id") || 
@@ -398,7 +394,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
       if (method === "POST") return await handleCreateAdminAccount(request, env);
       if (method === "PUT") return await handleUpdateAdminAccount(request, env);
       if (method === "DELETE") return await handleDeleteAdminAccount(request, env);
-      if (method === "OPTIONS") return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization" } });
+      if (method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
     }
     if (pathname === "/api/admin/accounts/me" && method === "PUT") {
       return await handleUpdateMeAdmin(request, env);
@@ -417,13 +413,13 @@ export const onRequest: PagesFunction<any> = async (context) => {
       if (method === "POST") return await handleCreateSaaSPlan(request, env);
       if (method === "PUT") return await handleUpdateSaaSPlan(request, env);
       if (method === "DELETE") return await handleDeleteSaaSPlan(request, env);
-      if (method === "OPTIONS") return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization" } });
+      if (method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
     }
 
     // SaaS 管理者用 監査ログ API
     if (pathname === "/api/admin/audit-logs") {
       if (method === "GET") return await handleGetAdminAuditLogs(request, env);
-      if (method === "OPTIONS") return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization" } });
+      if (method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
     }
 
     // 📢 一括アナウンス API
@@ -434,7 +430,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
     if (pathname === "/api/admin/announcements") {
       if (method === "GET") return await handleGetAdminAnnouncements(request, env);
       if (method === "POST") return await handleCreateAdminAnnouncement(request, env);
-      if (method === "OPTIONS") return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization" } });
+      if (method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
     }
 
     if (pathname.startsWith("/api/admin/announcements/")) {

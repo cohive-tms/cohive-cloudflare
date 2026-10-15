@@ -119,6 +119,15 @@ async function runMigrations(env: Env) {
     }
   }
 
+  // login_verification_codes テーブルの attempts カラムの自動マイグレーション
+  try {
+    await env.DB.prepare("SELECT attempts FROM login_verification_codes LIMIT 1").all();
+  } catch (colErr: any) {
+    if (colErr.message && (colErr.message.includes("no such column") || colErr.message.includes("has no column"))) {
+      await env.DB.prepare("ALTER TABLE login_verification_codes ADD COLUMN attempts INTEGER DEFAULT 0").run();
+    }
+  }
+
 
 
   // push_subscriptions テーブルとインデックスの自動マイグレーション
@@ -227,12 +236,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   const method = request.method;
   if (method === "OPTIONS") {
     return new Response(null, {
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, X-Workspace-Id, X-User-Id, Authorization",
-        "Access-Control-Allow-Credentials": "true",
-      },
+      headers: getCorsHeaders(request, "GET, POST, PUT, DELETE, OPTIONS", env),
     });
   }
 
